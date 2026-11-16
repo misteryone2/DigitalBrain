@@ -3,8 +3,23 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { brainModules } from "../data/brainModules";
 
-function Brain() {
+interface BrainProps {
+  onSelectModule: (moduleId: string | null) => void;
+  selectedModuleId: string | null;
+}
+
+function Brain({ onSelectModule, selectedModuleId }: BrainProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const onSelectModuleRef = useRef(onSelectModule);
+  const selectedModuleIdRef = useRef(selectedModuleId);
+
+  useEffect(() => {
+    onSelectModuleRef.current = onSelectModule;
+  }, [onSelectModule]);
+
+  useEffect(() => {
+    selectedModuleIdRef.current = selectedModuleId;
+  }, [selectedModuleId]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -32,8 +47,8 @@ function Brain() {
 
     const geometries: THREE.BufferGeometry[] = [];
     const materials: THREE.Material[] = [];
+    const moduleNodes = new Map<string, THREE.Mesh>();
 
-    // Central CORE
     const coreGeometry = new THREE.SphereGeometry(0.55, 32, 32);
     const coreMaterial = new THREE.MeshStandardMaterial({
       color: 0x4c9eff,
@@ -49,9 +64,7 @@ function Brain() {
     const core = new THREE.Mesh(coreGeometry, coreMaterial);
     brainGroup.add(core);
 
-    // Peripheral modules and connections
     const moduleGeometry = new THREE.SphereGeometry(0.22, 24, 24);
-
     geometries.push(moduleGeometry);
 
     for (const module of brainModules) {
@@ -67,7 +80,9 @@ function Brain() {
 
       const node = new THREE.Mesh(moduleGeometry, moduleMaterial);
       node.position.set(...module.position);
+      node.userData.moduleId = module.id;
 
+      moduleNodes.set(module.id, node);
       brainGroup.add(node);
 
       const points = [
@@ -75,10 +90,7 @@ function Brain() {
         new THREE.Vector3(...module.position),
       ];
 
-      const connectionGeometry = new THREE.BufferGeometry().setFromPoints(
-        points
-      );
-
+      const connectionGeometry = new THREE.BufferGeometry().setFromPoints(points);
       const connectionMaterial = new THREE.LineBasicMaterial({
         color: module.color,
         transparent: true,
@@ -88,15 +100,11 @@ function Brain() {
       geometries.push(connectionGeometry);
       materials.push(connectionMaterial);
 
-      const connection = new THREE.Line(
-        connectionGeometry,
-        connectionMaterial
+      brainGroup.add(
+        new THREE.Line(connectionGeometry, connectionMaterial)
       );
-
-      brainGroup.add(connection);
     }
 
-    // Lighting
     scene.add(new THREE.AmbientLight(0xffffff, 1.5));
 
     const mainLight = new THREE.PointLight(0x5ba9ff, 35);
@@ -107,7 +115,30 @@ function Brain() {
     secondaryLight.position.set(-3, -2, -3);
     scene.add(secondaryLight);
 
-    // Responsive rendering
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(pointer, camera);
+
+      const nodes = Array.from(moduleNodes.values());
+      const intersections = raycaster.intersectObjects(nodes);
+
+      if (intersections.length > 0) {
+        const moduleId = intersections[0].object.userData.moduleId as string;
+        onSelectModuleRef.current(moduleId);
+      } else {
+        onSelectModuleRef.current(null);
+      }
+    };
+
+    renderer.domElement.addEventListener("pointerdown", handlePointerDown);
+
     const resizeObserver = new ResizeObserver(() => {
       const width = container.clientWidth;
       const height = container.clientHeight;
@@ -133,6 +164,14 @@ function Brain() {
       brainGroup.rotation.y += 0.0015;
       brainGroup.rotation.x += 0.0005;
 
+      for (const [moduleId, node] of moduleNodes) {
+        const material = node.material as THREE.MeshStandardMaterial;
+        const selected = moduleId === selectedModuleIdRef.current;
+
+        material.emissiveIntensity = selected ? 1.2 : 0.25;
+        node.scale.setScalar(selected ? 1.35 : 1);
+      }
+
       renderer.render(scene, camera);
     };
 
@@ -141,6 +180,11 @@ function Brain() {
     return () => {
       cancelAnimationFrame(animationFrame);
       resizeObserver.disconnect();
+
+      renderer.domElement.removeEventListener(
+        "pointerdown",
+        handlePointerDown
+      );
 
       for (const geometry of geometries) {
         geometry.dispose();
