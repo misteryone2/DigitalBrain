@@ -1,0 +1,33 @@
+
+name: Interface CI
+
+on:
+  push:
+    paths:
+      - "interface/**"
+      - ".github/workflows/interface.yml"
+  pull_request:
+    paths:
+      - "interface/**"
+      - ".github/workflows/interface.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        working-directory: interface
+        run: npm install --no-audit --no-fund
+
+      - name: Build interface
+        working-directory: interface
+        run: npm run build
