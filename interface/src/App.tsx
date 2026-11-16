@@ -1,7 +1,17 @@
 
+import { useState } from "react";
 import Brain from "./components/Brain";
+import ModuleDetails from "./components/ModuleDetails";
+import { brainModules } from "./data/brainModules";
 
 function App() {
+  const [selectedModuleId, setSelectedModuleId] = useState<string | null>(
+    null
+  );
+
+  const selectedModule =
+    brainModules.find((module) => module.id === selectedModuleId) ?? null;
+
   return (
     <main className="dashboard">
       <header className="topbar">
@@ -23,13 +33,18 @@ function App() {
           <p>Central cognitive architecture</p>
 
           <div className="core-visual">
-            <Brain />
+            <Brain
+              onSelectModule={setSelectedModuleId}
+              selectedModuleId={selectedModuleId}
+            />
           </div>
 
           <span className="demo-label">
             3D VISUALIZATION — DEVELOPMENT PREVIEW
           </span>
         </article>
+
+        <ModuleDetails module={selectedModule} />
 
         <article className="panel metrics-panel">
           <span className="panel-label">SYSTEM OVERVIEW</span>
@@ -64,22 +79,23 @@ function App() {
         </div>
 
         <div className="module-grid">
-          {[
-            "INPUT",
-            "MEMORY",
-            "KNOWLEDGE",
-            "REASONING",
-            "PLANNING",
-            "LEARNING",
-            "METACOGNITION",
-            "EXECUTION",
-            "EVOLUTION",
-            "VALIDATION",
-          ].map((module) => (
-            <article className="module-card" key={module}>
+          {brainModules.map((module) => (
+            <article
+              className="module-card"
+              key={module.id}
+              onClick={() => setSelectedModuleId(module.id)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setSelectedModuleId(module.id);
+                }
+              }}
+            >
               <span className="module-indicator"></span>
-              <h3>{module}</h3>
-              <p>Awaiting implementation</p>
+              <h3>{module.label}</h3>
+              <p>{module.description}</p>
             </article>
           ))}
         </div>
