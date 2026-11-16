@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "digitalbrain"
+version = "0.1.0"
+description = "A modular, local-first foundation for an autonomous digital assistant."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary - license to be selected" }
+authors = [{ name = "DigitalBrain contributors" }]
+dependencies = []
+
+[project.scripts]
+digitalbrain = "digitalbrain.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
