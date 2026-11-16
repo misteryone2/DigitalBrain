@@ -16,7 +16,7 @@ function Brain() {
 
     const camera = new THREE.PerspectiveCamera(
       45,
-      container.clientWidth / container.clientHeight,
+      1,
       0.1,
       100
     );
@@ -29,7 +29,10 @@ function Brain() {
     });
 
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setSize(
+      container.clientWidth,
+      container.clientHeight
+    );
 
     container.appendChild(renderer.domElement);
 
@@ -44,7 +47,6 @@ function Brain() {
     });
 
     const brainMesh = new THREE.Mesh(geometry, material);
-
     scene.add(brainMesh);
 
     const light = new THREE.PointLight(0x5ba9ff, 35);
@@ -52,6 +54,22 @@ function Brain() {
     scene.add(light);
 
     scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+
+    const resizeObserver = new ResizeObserver(() => {
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+
+      if (width === 0 || height === 0) {
+        return;
+      }
+
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+
+      renderer.setSize(width, height);
+    });
+
+    resizeObserver.observe(container);
 
     let animationFrame = 0;
 
@@ -68,6 +86,7 @@ function Brain() {
 
     return () => {
       cancelAnimationFrame(animationFrame);
+      resizeObserver.disconnect();
       geometry.dispose();
       material.dispose();
       renderer.dispose();
