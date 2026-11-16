@@ -81,7 +81,9 @@ function App() {
         <div className="module-grid">
           {brainModules.map((module) => (
             <article
-              className="module-card"
+              className={`module-card ${
+  selectedModuleId === module.id ? "selected" : ""
+}`}
               key={module.id}
               onClick={() => setSelectedModuleId(module.id)}
               role="button"
