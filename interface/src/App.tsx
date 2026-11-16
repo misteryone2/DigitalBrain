@@ -1,4 +1,6 @@
 
+import Brain from "./components/Brain";
+
 function App() {
   return (
     <main className="dashboard">
@@ -19,12 +21,14 @@ function App() {
           <span className="panel-label">CORE SYSTEM</span>
           <h2>Digital Brain</h2>
           <p>Central cognitive architecture</p>
+
           <div className="core-visual">
-            <div className="core-orbit">
-              <div className="core-center">DB</div>
-            </div>
+            <Brain />
           </div>
-          <span className="demo-label">VISUAL PREVIEW — DEMO</span>
+
+          <span className="demo-label">
+            3D VISUALIZATION — DEVELOPMENT PREVIEW
+          </span>
         </article>
 
         <article className="panel metrics-panel">
@@ -89,4 +93,3 @@ function App() {
 }
 
 export default App;
-
