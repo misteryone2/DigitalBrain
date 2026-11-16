@@ -1,6 +1,7 @@
 
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { brainModules } from "../data/brainModules";
 
 interface BrainProps {
@@ -41,6 +42,15 @@ function Brain({ onSelectModule, selectedModuleId }: BrainProps) {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(container.clientWidth, container.clientHeight);
     container.appendChild(renderer.domElement);
+
+    // Manual camera controls
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.enablePan = false;
+    controls.minDistance = 5;
+    controls.maxDistance = 13;
+    controls.autoRotate = false;
 
     const brainGroup = new THREE.Group();
     scene.add(brainGroup);
@@ -90,7 +100,9 @@ function Brain({ onSelectModule, selectedModuleId }: BrainProps) {
         new THREE.Vector3(...module.position),
       ];
 
-      const connectionGeometry = new THREE.BufferGeometry().setFromPoints(points);
+      const connectionGeometry =
+        new THREE.BufferGeometry().setFromPoints(points);
+
       const connectionMaterial = new THREE.LineBasicMaterial({
         color: module.color,
         transparent: true,
@@ -118,7 +130,30 @@ function Brain({ onSelectModule, selectedModuleId }: BrainProps) {
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
 
+    // Distinguish a click from a camera drag
+    let pointerDownPosition: { x: number; y: number } | null = null;
+
     const handlePointerDown = (event: PointerEvent) => {
+      pointerDownPosition = {
+        x: event.clientX,
+        y: event.clientY,
+      };
+    };
+
+    const handlePointerUp = (event: PointerEvent) => {
+      if (!pointerDownPosition) {
+        return;
+      }
+
+      const deltaX = event.clientX - pointerDownPosition.x;
+      const deltaY = event.clientY - pointerDownPosition.y;
+
+      pointerDownPosition = null;
+
+      if (Math.hypot(deltaX, deltaY) > 5) {
+        return;
+      }
+
       const rect = renderer.domElement.getBoundingClientRect();
 
       pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -137,7 +172,13 @@ function Brain({ onSelectModule, selectedModuleId }: BrainProps) {
       }
     };
 
+    const handlePointerCancel = () => {
+      pointerDownPosition = null;
+    };
+
     renderer.domElement.addEventListener("pointerdown", handlePointerDown);
+    renderer.domElement.addEventListener("pointerup", handlePointerUp);
+    renderer.domElement.addEventListener("pointercancel", handlePointerCancel);
 
     const resizeObserver = new ResizeObserver(() => {
       const width = container.clientWidth;
@@ -148,7 +189,6 @@ function Brain({ onSelectModule, selectedModuleId }: BrainProps) {
       }
 
       camera.aspect = width / height;
-      camera.position.z = camera.aspect < 0.8 ? 11 : 8;
       camera.updateProjectionMatrix();
 
       renderer.setSize(width, height);
@@ -161,8 +201,8 @@ function Brain({ onSelectModule, selectedModuleId }: BrainProps) {
     const animate = () => {
       animationFrame = requestAnimationFrame(animate);
 
-      brainGroup.rotation.y += 0.0015;
-      brainGroup.rotation.x += 0.0005;
+      // Apply smooth camera movement
+      controls.update();
 
       for (const [moduleId, node] of moduleNodes) {
         const material = node.material as THREE.MeshStandardMaterial;
@@ -185,6 +225,16 @@ function Brain({ onSelectModule, selectedModuleId }: BrainProps) {
         "pointerdown",
         handlePointerDown
       );
+      renderer.domElement.removeEventListener(
+        "pointerup",
+        handlePointerUp
+      );
+      renderer.domElement.removeEventListener(
+        "pointercancel",
+        handlePointerCancel
+      );
+
+      controls.dispose();
 
       for (const geometry of geometries) {
         geometry.dispose();
