@@ -1,32 +1,56 @@
 
-/* Three.js brain visualization */
+/* Interactive module selection */
 
-.core-visual {
-  width: 100%;
-  min-height: 280px;
-  overflow: hidden;
+.module-card {
+  cursor: pointer;
   position: relative;
 }
 
-.brain-container {
-  width: 100%;
-  height: 280px;
-  position: relative;
-  overflow: hidden;
+.module-card:focus-visible {
+  outline: 2px solid #5ba9ff;
+  outline-offset: 3px;
+}
+
+.module-card.selected {
+  border-color: #5ba9ff;
+  background: linear-gradient(145deg, #172d49, #101a2b);
+  box-shadow: 0 0 20px #3478c833;
+}
+
+.module-card.selected .module-indicator {
+  background: #5ba9ff;
+  box-shadow: 0 0 12px #5ba9ff;
+}
+
+.module-details {
+  min-width: 0;
+}
+
+.module-details-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.module-details-heading h2 {
+  margin: 16px 0 8px;
+}
+
+.module-color {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  box-shadow: 0 0 12px currentColor;
 }
 
 .brain-container canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
+  cursor: crosshair;
+  touch-action: manipulation;
 }
 
-@media (max-width: 600px) {
-  .core-visual {
-    min-height: 230px;
-  }
-
-  .brain-container {
-    height: 230px;
+@media (max-width: 900px) {
+  .overview {
+    grid-template-columns: 1fr;
   }
 }
