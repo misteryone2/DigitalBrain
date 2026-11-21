@@ -10,11 +10,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from digitalbrain.core.context import ContextAssembler
 from digitalbrain.core.intent import (
     IntentClassifier,
     IntentResult,
     IntentType,
 )
+from digitalbrain.knowledge import SQLiteKnowledgeStore
 from digitalbrain.memory import MemoryType, SQLiteMemoryStore
 
 
@@ -28,6 +30,7 @@ class GoalResult:
     status: GoalStatus
     plan: tuple[str, ...]
     memory_record_id: str | None = None
+    context_summary: dict[str, int] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,9 +44,15 @@ class MessageResult:
 class DigitalBrain:
     """Central coordinator of the DigitalBrain system."""
 
-    def __init__(self, memory: SQLiteMemoryStore | None = None) -> None:
+    def __init__(
+        self,
+        memory: SQLiteMemoryStore | None = None,
+        knowledge: SQLiteKnowledgeStore | None = None,
+    ) -> None:
         self.intent_classifier = IntentClassifier()
         self._memory = memory
+        self._knowledge = knowledge
+        self._context = ContextAssembler(memory=memory, knowledge=knowledge)
 
     def process_message(self, message: str) -> MessageResult:
         normalized_message = message.strip()
@@ -109,6 +118,7 @@ class DigitalBrain:
         if not normalized_goal:
             raise ValueError("The goal must not be empty.")
 
+        context = self._context.assemble(normalized_goal)
         plan = (
             "Clarify the desired outcome and define measurable success criteria.",
             "Identify constraints, available resources, and potential risks.",
@@ -126,6 +136,11 @@ class DigitalBrain:
                 metadata={
                     "status": GoalStatus.ACCEPTED.value,
                     "plan_steps": len(plan),
+                    "context": {
+                        "recent_goals": len(context.recent_goals),
+                        "relevant_memories": len(context.relevant_memories),
+                        "relevant_facts": len(context.relevant_facts),
+                    },
                 },
             )
             memory_record_id = record.id
@@ -134,4 +149,9 @@ class DigitalBrain:
             status=GoalStatus.ACCEPTED,
             plan=plan,
             memory_record_id=memory_record_id,
+            context_summary={
+                "recent_goals": len(context.recent_goals),
+                "relevant_memories": len(context.relevant_memories),
+                "relevant_facts": len(context.relevant_facts),
+            },
         )

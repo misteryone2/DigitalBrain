@@ -45,6 +45,8 @@ class DigitalBrainTests(unittest.TestCase):
             self.assertEqual(record.memory_type, MemoryType.GOAL.value)
             self.assertEqual(record.content, "Track expenses")
             self.assertEqual(record.source, "core.process_goal")
+            self.assertIn("context", record.metadata)
+            self.assertIsNotNone(result.context_summary)
 
     def test_process_message_records_episodic_memory(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
