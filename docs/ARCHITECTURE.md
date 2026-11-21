@@ -84,6 +84,12 @@ Technologies may evolve, but independence, modularity, verifiability, and safety
 
 - `src/digitalbrain/core/contracts.py` defines Protocols for memory, knowledge, and context assembly. `DigitalBrain` accepts injected implementations, enabling controlled evolution without coupling Core to SQLite-specific classes.
 
+## Context and audit (current)
+
+- **Context policy:** deterministic selection for facts in same subject/predicate: highest confidence, then newest, then id. Conflicts remain exposed in `knowledge_conflicts` and `context_notes`.
+- **Planning:** deterministic, context-aware baseline adds explicit steps for selected facts, unresolved conflicts, and recent related goals. No opaque scoring.
+- **Audit:** `AuditLog` (`audit_events`) provides append-only trace for core actions (currently `goal.processed`), with schema versioning.
+
 ## Current implementation boundary
 
 The repository currently provides: goal/message intake, deterministic intent classification, deterministic baseline planning, optional SQLite memory persistence, CLI inspection, and unit tests. It does **not** yet provide autonomous reasoning, knowledge graph/context engine, learning from outcomes, tool execution, self-modification, or a dashboard connected to real runtime state. Those capabilities must be added incrementally and verified before being reported as implemented.

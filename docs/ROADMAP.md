@@ -25,7 +25,9 @@ This roadmap turns the [founding vision](VISION.md) into incremental, verifiable
 - [x] CLI knowledge commands (add/list/search/stats)
 - [x] Context assembly baseline from memory and knowledge
 - [x] Basic confidence/conflict detection surfaced in context summary
-- [ ] Conflict resolution policy and confidence-weighted context selection
+- [x] Deterministic conflict policy and confidence-weighted context selection
+- [x] Deterministic context-aware planning baseline with tests
+- [x] Append-only audit baseline
 
 ## M3 — Reasoning and planning
 - [ ] Internal reasoning/planning interfaces (no external LLM dependency)

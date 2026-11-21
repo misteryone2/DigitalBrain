@@ -21,9 +21,10 @@ The project is developed incrementally. The first milestone is a small, testable
 - [x] CLI knowledge commands (add/list/search/stats)
 - [x] Deterministic context assembly baseline (memory + knowledge snapshot in goal processing)
 - [x] Basic knowledge conflict detection surfaced in context
+- [x] Deterministic conflict policy: highest confidence, then newest, then id; conflicts still exposed
+- [x] Deterministic context-aware planning with tests
 - [x] Initial Core contracts/protocols for memory, knowledge, context
-- [ ] Conflict resolution policy and confidence-weighted context selection
-- [ ] Deterministic planning that consumes context signals with tests
+- [x] Append-only audit log baseline for goal processing
 
 ## Requirements
 
