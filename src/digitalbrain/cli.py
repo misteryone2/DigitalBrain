@@ -38,6 +38,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="SQLite file for persisting plan versions.",
     )
     parser.add_argument(
+        "--list-plans",
+        action="store_true",
+        help="List plan records from --plan-db.",
+    )
+    parser.add_argument(
+        "--get-plan",
+        help="Get a plan record by id from --plan-db.",
+    )
+    parser.add_argument(
+        "--list-audit",
+        action="store_true",
+        help="List audit events from --audit-db.",
+    )
+    parser.add_argument(
         "--list-memory",
         action="store_true",
         help="List memory records from --memory-db instead of processing a goal.",
@@ -157,6 +171,17 @@ def _print_fact(record: object) -> None:
         print(f"  metadata: {record.metadata}")
 
 
+def _print_plan(record: object) -> None:
+    print(f"[{record.created_at}] {record.id} v{record.version} status={record.status}")
+    print(f"  goal: {record.goal}")
+    print(f"  source: {record.source}")
+    if record.parent_plan_id:
+        print(f"  parent: {record.parent_plan_id}")
+    if record.warnings:
+        print(f"  warnings: {list(record.warnings)}")
+    print(f"  steps: {len(record.steps)}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -168,14 +193,19 @@ def main(argv: list[str] | None = None) -> int:
         bool(args.correct_memory),
     ]
     knowledge_actions = [bool(args.add_fact), args.list_facts, args.knowledge_stats]
+    plan_actions = [args.list_plans, bool(args.get_plan)]
+    audit_actions = [args.list_audit]
+    groups = [any(memory_actions), any(knowledge_actions), any(plan_actions), any(audit_actions)]
     if sum(1 for a in memory_actions if a) > 1:
         parser.error(
             "Use only one of --list-memory, --memory-stats, --get-memory, or --correct-memory"
         )
     if sum(1 for a in knowledge_actions if a) > 1:
         parser.error("Use only one of --add-fact, --list-facts, or --knowledge-stats")
-    if any(memory_actions) and any(knowledge_actions):
-        parser.error("Use memory commands separately from knowledge commands")
+    if sum(1 for a in plan_actions if a) > 1:
+        parser.error("Use only one of --list-plans or --get-plan")
+    if sum(groups) > 1:
+        parser.error("Use memory, knowledge, plan, or audit commands separately")
 
     if args.correct_memory:
         if not args.memory_db:
@@ -195,6 +225,39 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Corrected record: {args.correct_memory}")
         print(f"New record: {record.id}")
         return 0
+
+    if args.list_plans or args.get_plan:
+        if not args.plan_db:
+            parser.error("Plan commands require --plan-db")
+        with SQLitePlanStore(args.plan_db) as plans:
+            if args.get_plan:
+                plan = plans.get(args.get_plan)
+                if plan is None:
+                    print(f"Plan record not found: {args.get_plan}")
+                    return 1
+                _print_plan(plan)
+                return 0
+            records = plans.list_plans(limit=args.limit)
+            if not records:
+                print("No plan records found.")
+                return 0
+            for rec in records:
+                _print_plan(rec)
+            return 0
+
+    if args.list_audit:
+        if not args.audit_db:
+            parser.error("--list-audit requires --audit-db")
+        with AuditLog(args.audit_db) as audit:
+            events = audit.list_events(limit=args.limit)
+            if not events:
+                print("No audit events found.")
+                return 0
+            for e in events:
+                print(f"[{e.created_at}] {e.id} {e.event_type} outcome={e.outcome} actor={e.actor}")
+                if e.details:
+                    print(f"  details: {e.details}")
+            return 0
 
     if args.add_fact or args.list_facts or args.knowledge_stats:
         if not args.knowledge_db:

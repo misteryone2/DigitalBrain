@@ -108,6 +108,28 @@ class CLITests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertIn("DigitalBrain uses SQLite", list_out.getvalue())
 
+    def test_plan_and_audit_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            plan_db = Path(tmp) / "plans.db"
+            audit_db = Path(tmp) / "audit.db"
+            out = io.StringIO()
+            with redirect_stdout(out):
+                code = main(["--plan-db", str(plan_db), "--audit-db", str(audit_db), "Track expenses"])
+            self.assertEqual(code, 0)
+            self.assertIn("Plan record:", out.getvalue())
+
+            plans_out = io.StringIO()
+            with redirect_stdout(plans_out):
+                code = main(["--plan-db", str(plan_db), "--list-plans"])
+            self.assertEqual(code, 0)
+            self.assertIn("Track expenses", plans_out.getvalue())
+
+            audit_out = io.StringIO()
+            with redirect_stdout(audit_out):
+                code = main(["--audit-db", str(audit_db), "--list-audit"])
+            self.assertEqual(code, 0)
+            self.assertIn("plan.generated", audit_out.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()
