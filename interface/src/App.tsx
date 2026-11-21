@@ -52,22 +52,22 @@ function App() {
 
           <div className="metric">
             <span>Core</span>
-            <strong>INITIALIZING</strong>
+            <strong>BASELINE ACTIVE</strong>
           </div>
 
           <div className="metric">
             <span>Memory</span>
-            <strong>NOT CONNECTED</strong>
+            <strong>SQLITE AVAILABLE</strong>
           </div>
 
           <div className="metric">
             <span>Reasoning</span>
-            <strong>NOT AVAILABLE</strong>
+            <strong>NOT IMPLEMENTED</strong>
           </div>
 
           <div className="metric">
             <span>Evolution</span>
-            <strong>NOT AVAILABLE</strong>
+            <strong>NOT IMPLEMENTED</strong>
           </div>
         </article>
       </section>
