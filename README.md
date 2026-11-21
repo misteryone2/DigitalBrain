@@ -6,16 +6,19 @@ The project is developed incrementally. The first milestone is a small, testable
 
 ## Current status
 
-**Milestone 0 — Foundation**
+**Milestone 1 — Memory (in progress)**
 
 - [x] Repository and project structure
 - [x] Minimal Python package
 - [x] Goal intake and deterministic planning baseline
 - [x] Command-line entry point
 - [x] Automated tests
-- [ ] Persistent memory
-- [ ] Language-model provider interface
-- [ ] Tool permissions and sandboxed execution
+- [x] SQLite memory store with traceable records
+- [x] Correction/supersession support
+- [x] Optional CLI memory persistence and inspection
+- [ ] Richer memory query/retrieval API
+- [ ] Core integration beyond goal intake events
+- [ ] Knowledge/context layer (next milestone)
 
 ## Requirements
 
@@ -26,6 +29,8 @@ The project is developed incrementally. The first milestone is a small, testable
 
     python -m pip install -e .
     digitalbrain "Create a simple personal finance application"
+    digitalbrain --memory-db .\data\memory.db "Track expenses"
+    digitalbrain --memory-db .\data\memory.db --list-memory
 
 Run tests:
 
@@ -40,4 +45,4 @@ Run tests:
 5. **Local-first:** prefer local models and free tooling; external providers are optional.
 6. **Human-governed evolution:** experiments happen on isolated branches/workspaces; production changes require validation and explicit approval.
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/ROADMAP.md](docs/ROADMAP.md).
+See [docs/VISION.md](docs/VISION.md) for the founding vision and principles, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the technical architecture, and [docs/ROADMAP.md](docs/ROADMAP.md) for the development roadmap.

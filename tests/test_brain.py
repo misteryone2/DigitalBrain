@@ -1,8 +1,11 @@
-"""Tests for the first DigitalBrain milestone."""
+"""Tests for the DigitalBrain core."""
 
+import tempfile
 import unittest
+from pathlib import Path
 
 from digitalbrain.core.brain import DigitalBrain, GoalStatus
+from digitalbrain.memory import MemoryType, SQLiteMemoryStore
 
 
 class DigitalBrainTests(unittest.TestCase):
@@ -15,6 +18,7 @@ class DigitalBrainTests(unittest.TestCase):
         self.assertEqual(result.goal, "Build a note-taking app")
         self.assertEqual(result.status, GoalStatus.ACCEPTED)
         self.assertGreaterEqual(len(result.plan), 3)
+        self.assertIsNone(result.memory_record_id)
 
     def test_trims_surrounding_whitespace(self) -> None:
         result = self.brain.process_goal("  Organize project files  ")
@@ -23,6 +27,23 @@ class DigitalBrainTests(unittest.TestCase):
     def test_rejects_empty_goal(self) -> None:
         with self.assertRaises(ValueError):
             self.brain.process_goal("   ")
+
+    def test_records_goal_when_memory_is_configured(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "memory.db"
+            with SQLiteMemoryStore(db_path) as memory:
+                brain = DigitalBrain(memory=memory)
+                result = brain.process_goal("Track expenses")
+
+                self.assertIsNotNone(result.memory_record_id)
+                assert result.memory_record_id is not None
+                record = memory.get(result.memory_record_id)
+
+            self.assertIsNotNone(record)
+            assert record is not None
+            self.assertEqual(record.memory_type, MemoryType.GOAL.value)
+            self.assertEqual(record.content, "Track expenses")
+            self.assertEqual(record.source, "core.process_goal")
 
 
 if __name__ == "__main__":

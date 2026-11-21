@@ -1,5 +1,9 @@
+"""Core orchestration for DigitalBrain.
 
-"""Core orchestration for DigitalBrain."""
+This module coordinates baseline intent handling and goal planning. It
+establishes stable interfaces before adding broader reasoning, knowledge,
+learning, tools, or autonomous evolution.
+"""
 
 from __future__ import annotations
 
@@ -11,6 +15,7 @@ from digitalbrain.core.intent import (
     IntentResult,
     IntentType,
 )
+from digitalbrain.memory import MemoryType, SQLiteMemoryStore
 
 
 class GoalStatus(StrEnum):
@@ -22,6 +27,7 @@ class GoalResult:
     goal: str
     status: GoalStatus
     plan: tuple[str, ...]
+    memory_record_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,15 +41,14 @@ class MessageResult:
 class DigitalBrain:
     """Central coordinator of the DigitalBrain system."""
 
-    def __init__(self) -> None:
+    def __init__(self, memory: SQLiteMemoryStore | None = None) -> None:
         self.intent_classifier = IntentClassifier()
+        self._memory = memory
 
     def process_message(self, message: str) -> MessageResult:
         normalized_message = message.strip()
 
-        intent_result = self.intent_classifier.classify(
-            normalized_message
-        )
+        intent_result = self.intent_classifier.classify(normalized_message)
 
         if intent_result.intent == IntentType.CONVERSATION:
             response = (
@@ -97,9 +102,22 @@ class DigitalBrain:
             "Choose an approach and implement the smallest useful first step.",
             "Run checks, evaluate the results, and record what was learned.",
         )
-
+        memory_record_id = None
+        if self._memory is not None:
+            record = self._memory.add_record(
+                normalized_goal,
+                memory_type=MemoryType.GOAL,
+                source="core.process_goal",
+                confidence=1.0,
+                metadata={
+                    "status": GoalStatus.ACCEPTED.value,
+                    "plan_steps": len(plan),
+                },
+            )
+            memory_record_id = record.id
         return GoalResult(
             goal=normalized_goal,
             status=GoalStatus.ACCEPTED,
             plan=plan,
+            memory_record_id=memory_record_id,
         )
