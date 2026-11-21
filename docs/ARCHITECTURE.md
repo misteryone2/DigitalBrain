@@ -70,6 +70,11 @@ Input -> CORE -> Memory/Knowledge/Reasoning/Planning
 
 Technologies may evolve, but independence, modularity, verifiability, and safety remain mandatory.
 
+## Memory model (current)
+
+- **Canonical (M1):** `SQLiteMemoryStore` (`memory_records`) with typed records, confidence, metadata, and correction/supersession. This is the active persistence path for Core/CLI.
+- **Legacy:** `memory.episodic.MemoryStore` (`episodes`) retained for backward compatibility; do not extend. Migrate or remove after dependents are updated.
+
 ## Current implementation boundary
 
-Milestone 0 contains goal validation, a deterministic starter plan, CLI entry point, and unit tests. It does **not** yet provide persistent memory, knowledge representation, autonomous reasoning, learning, tool execution, self-modification, or a dashboard. Those capabilities must be added incrementally and verified before being reported as implemented.
+The repository currently provides: goal/message intake, deterministic intent classification, deterministic baseline planning, optional SQLite memory persistence, CLI inspection, and unit tests. It does **not** yet provide autonomous reasoning, knowledge graph/context engine, learning from outcomes, tool execution, self-modification, or a dashboard connected to real runtime state. Those capabilities must be added incrementally and verified before being reported as implemented.

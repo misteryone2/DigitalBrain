@@ -15,6 +15,7 @@ This roadmap turns the [founding vision](VISION.md) into incremental, verifiable
 - [x] Retrieval/query API with tests (basic filters; extend as needed)
 - [x] Core integration for recording goal processing events
 - [x] CLI support for memory persistence and inspection
+- [ ] Memory API hardening: search/stats CLI, schema versioning/migrations, deprecate legacy episodic store
 
 ## M2 — Knowledge and context
 - [ ] Structured knowledge records/facts with provenance

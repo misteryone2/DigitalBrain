@@ -6,18 +6,17 @@ The project is developed incrementally. The first milestone is a small, testable
 
 ## Current status
 
-**Milestone 1 — Memory (in progress)**
+**Technical reset in progress (post-M1 baseline)**
 
 - [x] Repository and project structure
 - [x] Minimal Python package
-- [x] Goal intake and deterministic planning baseline
-- [x] Command-line entry point
-- [x] Automated tests
-- [x] SQLite memory store with traceable records
-- [x] Correction/supersession support
-- [x] Optional CLI memory persistence and inspection
-- [ ] Richer memory query/retrieval API
-- [ ] Core integration beyond goal intake events
+- [x] Goal/message intake with deterministic intent classifier
+- [x] Deterministic baseline planning
+- [x] SQLite memory store with traceable records and correction/supersession
+- [x] CLI memory persistence and inspection
+- [x] Automated tests consolidated under `tests/`
+- [ ] Memory hardening (search/stats CLI, schema versioning, legacy episodic deprecation)
+- [ ] Clear Core contracts/protocols and module boundaries
 - [ ] Knowledge/context layer (next milestone)
 
 ## Requirements

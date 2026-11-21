@@ -1,5 +1,10 @@
 
-"""Persistent episodic memory using SQLite."""
+"""Legacy episodic memory store.
+
+DEPRECATED: kept for backward compatibility with early tests/experiments.
+New code should use `digitalbrain.memory.store.SQLiteMemoryStore`, which
+supports typed records, metadata, confidence, and correction/supersession.
+"""
 
 from __future__ import annotations
 
