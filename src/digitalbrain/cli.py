@@ -55,6 +55,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Reason for --replan, recorded in audit/details.",
     )
     parser.add_argument(
+        "--set-plan-lifecycle",
+        nargs=2,
+        metavar=("PLAN_ID", "STATUS"),
+        help="Set lifecycle status for a plan record in --plan-db.",
+    )
+    parser.add_argument(
         "--list-audit",
         action="store_true",
         help="List audit events from --audit-db.",
@@ -180,13 +186,17 @@ def _print_fact(record: object) -> None:
 
 
 def _print_plan(record: object) -> None:
-    print(f"[{record.created_at}] {record.id} v{record.version} status={record.status}")
+    lifecycle = getattr(record, "lifecycle_status", "active")
+    print(f"[{record.created_at}] {record.id} v{record.version} status={record.status} lifecycle={lifecycle}")
     print(f"  goal: {record.goal}")
     print(f"  source: {record.source}")
     if record.parent_plan_id:
         print(f"  parent: {record.parent_plan_id}")
     if record.warnings:
         print(f"  warnings: {list(record.warnings)}")
+    gate = getattr(record, "metadata", {}).get("execution_gate") if hasattr(record, "metadata") else None
+    if isinstance(gate, dict):
+        print(f"  execution_gate: {gate.get('status')} executable={gate.get('executable')}")
     print(f"  steps: {len(record.steps)}")
 
 
@@ -201,7 +211,7 @@ def main(argv: list[str] | None = None) -> int:
         bool(args.correct_memory),
     ]
     knowledge_actions = [bool(args.add_fact), args.list_facts, args.knowledge_stats]
-    plan_actions = [args.list_plans, bool(args.get_plan), bool(args.replan)]
+    plan_actions = [args.list_plans, bool(args.get_plan), bool(args.replan), bool(args.set_plan_lifecycle)]
     audit_actions = [args.list_audit]
     groups = [any(memory_actions), any(knowledge_actions), any(plan_actions), any(audit_actions)]
     if sum(1 for a in memory_actions if a) > 1:
@@ -211,7 +221,7 @@ def main(argv: list[str] | None = None) -> int:
     if sum(1 for a in knowledge_actions if a) > 1:
         parser.error("Use only one of --add-fact, --list-facts, or --knowledge-stats")
     if sum(1 for a in plan_actions if a) > 1:
-        parser.error("Use only one of --list-plans, --get-plan, or --replan")
+        parser.error("Use only one of --list-plans, --get-plan, --replan, or --set-plan-lifecycle")
     if sum(groups) > 1:
         parser.error("Use memory, knowledge, plan, or audit commands separately")
 
@@ -232,6 +242,20 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
         print(f"Corrected record: {args.correct_memory}")
         print(f"New record: {record.id}")
+        return 0
+
+    if args.set_plan_lifecycle:
+        if not args.plan_db:
+            parser.error("--set-plan-lifecycle requires --plan-db")
+        plan_id, lifecycle_status = args.set_plan_lifecycle
+        with SQLitePlanStore(args.plan_db) as plans:
+            try:
+                rec = plans.set_lifecycle_status(plan_id, lifecycle_status, reason=args.reason)
+            except ValueError as exc:
+                print(f"Error: {exc}")
+                return 1
+        print(f"Plan record: {rec.id}")
+        print(f"Lifecycle: {rec.lifecycle_status}")
         return 0
 
     if args.replan:

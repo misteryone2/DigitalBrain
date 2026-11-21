@@ -28,6 +28,7 @@ from digitalbrain.core.planner import DeterministicPlanner, Plan, PlanStep
 from digitalbrain.knowledge import SQLiteKnowledgeStore
 from digitalbrain.memory import MemoryType, SQLiteMemoryStore
 from digitalbrain.planning import SQLitePlanStore
+from digitalbrain.planning.lifecycle import evaluate_execution_gate
 
 
 class GoalStatus(StrEnum):
@@ -179,12 +180,14 @@ class DigitalBrain:
                 },
             )
             memory_record_id = record.id
+        plan_dicts = [self._step_to_dict(step) for step in plan_obj.steps]
+        gate = evaluate_execution_gate(plan_dicts, plan_obj.warnings)
         if self._plan_store is not None:
             parent = self._plan_store.latest_for_goal(normalized_goal)
             plan_record = self._plan_store.save_plan(
                 goal=normalized_goal,
                 status=status.value,
-                steps=[self._step_to_dict(step) for step in plan_obj.steps],
+                steps=plan_dicts,
                 source="core.replan_goal" if replanned else "core.process_goal",
                 warnings=list(plan_obj.warnings),
                 context_summary={
@@ -195,6 +198,12 @@ class DigitalBrain:
                     "knowledge_conflicts": len(context.knowledge_conflicts),
                 },
                 parent_plan_id=parent.id if parent else None,
+                lifecycle_status="active",
+                metadata={
+                    "replanned": replanned,
+                    "reason": reason,
+                    "execution_gate": gate.to_dict(),
+                },
             )
             plan_record_id = plan_record.id
         if self._audit is not None:
@@ -233,6 +242,17 @@ class DigitalBrain:
                     },
                 )
             self._audit.record(
+                "plan.execution_gate",
+                actor="DigitalBrain",
+                outcome=gate.status,
+                details={
+                    "goal": normalized_goal,
+                    "plan_record_id": plan_record_id,
+                    "executable": gate.executable,
+                    "reasons": list(gate.reasons),
+                },
+            )
+            self._audit.record(
                 "goal.processed",
                 actor="DigitalBrain",
                 outcome=status.value,
@@ -244,6 +264,7 @@ class DigitalBrain:
                     "warnings": list(plan_obj.warnings),
                     "replanned": replanned,
                     "reason": reason,
+                    "execution_gate": gate.to_dict(),
                     "context_summary": {
                         "recent_goals": len(context.recent_goals),
                         "relevant_memories": len(context.relevant_memories),

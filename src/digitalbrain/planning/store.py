@@ -21,12 +21,14 @@ class PlanRecord:
     created_at: str
     goal: str
     status: str
+    lifecycle_status: str
     version: int
     parent_plan_id: str | None
     source: str
     warnings: tuple[str, ...]
     context_summary: dict[str, Any]
     steps: tuple[dict[str, Any], ...]
+    metadata: dict[str, Any]
 
     @property
     def is_latest(self) -> bool:
@@ -37,7 +39,7 @@ class PlanRecord:
 class SQLitePlanStore:
     """Persist and retrieve plan versions in SQLite."""
 
-    SCHEMA_VERSION = 1
+    SCHEMA_VERSION = 2
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
@@ -65,28 +67,47 @@ class SQLitePlanStore:
                 created_at TEXT NOT NULL,
                 goal TEXT NOT NULL,
                 status TEXT NOT NULL,
+                lifecycle_status TEXT NOT NULL DEFAULT 'active',
                 version INTEGER NOT NULL,
                 parent_plan_id TEXT,
                 source TEXT NOT NULL,
                 warnings_json TEXT NOT NULL,
                 context_summary_json TEXT NOT NULL,
                 steps_json TEXT NOT NULL,
+                metadata_json TEXT NOT NULL DEFAULT '{}',
                 FOREIGN KEY (parent_plan_id) REFERENCES plan_records(id)
             )
             """
         )
+        self._ensure_columns()
         self._connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_plan_records_goal_created ON plan_records(goal, created_at DESC)"
         )
         self._connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_plan_records_parent ON plan_records(parent_plan_id)"
         )
+        self._connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_plan_records_lifecycle ON plan_records(lifecycle_status, created_at DESC)"
+        )
         current = self._connection.execute("PRAGMA user_version").fetchone()[0]
         if current == 0:
+            self._connection.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
+        elif current == 1:
             self._connection.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
         elif current != self.SCHEMA_VERSION:
             raise RuntimeError(f"Unsupported plan schema version {current}")
         self._connection.commit()
+
+    def _ensure_columns(self) -> None:
+        cols = {row["name"] for row in self._connection.execute("PRAGMA table_info(plan_records)").fetchall()}
+        if "lifecycle_status" not in cols:
+            self._connection.execute(
+                "ALTER TABLE plan_records ADD COLUMN lifecycle_status TEXT NOT NULL DEFAULT 'active'"
+            )
+        if "metadata_json" not in cols:
+            self._connection.execute(
+                "ALTER TABLE plan_records ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'"
+            )
 
     def save_plan(
         self,
@@ -98,17 +119,22 @@ class SQLitePlanStore:
         warnings: list[str] | tuple[str, ...] = (),
         context_summary: dict[str, Any] | None = None,
         parent_plan_id: str | None = None,
+        lifecycle_status: str = "active",
+        metadata: dict[str, Any] | None = None,
         created_at: datetime | None = None,
     ) -> PlanRecord:
         goal_n = goal.strip()
         status_n = status.strip()
         source_n = source.strip()
+        lifecycle_n = lifecycle_status.strip()
         if not goal_n:
             raise ValueError("Goal must not be empty.")
         if not status_n:
             raise ValueError("Status must not be empty.")
         if not source_n:
             raise ValueError("Source must not be empty.")
+        if not lifecycle_n:
+            raise ValueError("Lifecycle status must not be empty.")
         if not steps:
             raise ValueError("Steps must not be empty.")
 
@@ -119,36 +145,41 @@ class SQLitePlanStore:
                 if parent is None:
                     raise ValueError(f"Unknown parent plan: {parent_plan_id}")
                 version = int(parent["version"]) + 1
+                self._set_lifecycle(parent_plan_id, "superseded", reason="replanned")
             record = PlanRecord(
                 id=uuid.uuid4().hex,
                 created_at=(created_at or datetime.now(timezone.utc)).isoformat(),
                 goal=goal_n,
                 status=status_n,
+                lifecycle_status=lifecycle_n,
                 version=version,
                 parent_plan_id=parent_plan_id,
                 source=source_n,
                 warnings=tuple(str(w) for w in warnings),
                 context_summary=dict(context_summary or {}),
                 steps=tuple(dict(s) for s in steps),
+                metadata=dict(metadata or {}),
             )
             self._connection.execute(
                 """
                 INSERT INTO plan_records (
-                    id, created_at, goal, status, version, parent_plan_id, source,
-                    warnings_json, context_summary_json, steps_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    id, created_at, goal, status, lifecycle_status, version, parent_plan_id, source,
+                    warnings_json, context_summary_json, steps_json, metadata_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record.id,
                     record.created_at,
                     record.goal,
                     record.status,
+                    record.lifecycle_status,
                     record.version,
                     record.parent_plan_id,
                     record.source,
                     json.dumps(list(record.warnings), ensure_ascii=False),
                     json.dumps(record.context_summary, sort_keys=True, ensure_ascii=False),
                     json.dumps(list(record.steps), ensure_ascii=False),
+                    json.dumps(record.metadata, sort_keys=True, ensure_ascii=False),
                 ),
             )
         return record
@@ -177,6 +208,43 @@ class SQLitePlanStore:
         plans = self.list_plans(limit=1, goal=goal)
         return plans[0] if plans else None
 
+    def set_lifecycle_status(self, plan_id: str, lifecycle_status: str, *, reason: str | None = None) -> PlanRecord:
+        lifecycle_n = lifecycle_status.strip()
+        if not lifecycle_n:
+            raise ValueError("Lifecycle status must not be empty.")
+        with self._connection:
+            row = self._get_row(plan_id)
+            if row is None:
+                raise ValueError(f"Unknown plan: {plan_id}")
+            self._set_lifecycle(plan_id, lifecycle_n, reason=reason)
+        record = self.get(plan_id)
+        if record is None:  # pragma: no cover
+            raise RuntimeError("Plan not found after update")
+        return record
+
+    def _set_lifecycle(self, plan_id: str, lifecycle_status: str, *, reason: str | None = None) -> None:
+        row = self._get_row(plan_id)
+        if row is None:
+            raise ValueError(f"Unknown plan: {plan_id}")
+        metadata = json.loads(row["metadata_json"]) if row["metadata_json"] else {}
+        if not isinstance(metadata, dict):
+            metadata = {"value": metadata}
+        history = metadata.get("lifecycle_history", [])
+        if not isinstance(history, list):
+            history = [history]
+        history.append(
+            {
+                "at": datetime.now(timezone.utc).isoformat(),
+                "status": lifecycle_status,
+                "reason": reason,
+            }
+        )
+        metadata["lifecycle_history"] = history
+        self._connection.execute(
+            "UPDATE plan_records SET lifecycle_status = ?, metadata_json = ? WHERE id = ?",
+            (lifecycle_status, json.dumps(metadata, sort_keys=True, ensure_ascii=False), plan_id),
+        )
+
     def _get_row(self, plan_id: str) -> sqlite3.Row | None:
         return self._connection.execute("SELECT * FROM plan_records WHERE id = ?", (plan_id,)).fetchone()
 
@@ -185,21 +253,28 @@ class SQLitePlanStore:
         warnings = json.loads(row["warnings_json"]) if row["warnings_json"] else []
         context_summary = json.loads(row["context_summary_json"]) if row["context_summary_json"] else {}
         steps = json.loads(row["steps_json"]) if row["steps_json"] else []
+        metadata = json.loads(row["metadata_json"]) if row["metadata_json"] else {}
         if not isinstance(warnings, list):
             warnings = [warnings]
         if not isinstance(context_summary, dict):
             context_summary = {"value": context_summary}
         if not isinstance(steps, list):
             steps = [steps]
+        if not isinstance(metadata, dict):
+            metadata = {"value": metadata}
+        keys = row.keys()
+        lifecycle_status = row["lifecycle_status"] if "lifecycle_status" in keys else "active"
         return PlanRecord(
             id=row["id"],
             created_at=row["created_at"],
             goal=row["goal"],
             status=row["status"],
+            lifecycle_status=lifecycle_status,
             version=int(row["version"]),
             parent_plan_id=row["parent_plan_id"],
             source=row["source"],
             warnings=tuple(str(w) for w in warnings),
             context_summary=context_summary,
             steps=tuple(dict(s) if isinstance(s, dict) else {"value": s} for s in steps),
+            metadata=metadata,
         )

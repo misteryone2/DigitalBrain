@@ -36,6 +36,8 @@ This roadmap turns the [founding vision](VISION.md) into incremental, verifiable
 - [x] Append-only plan version storage for replanning history
 - [x] Explicit replanning command/workflow with audit trail
 - [x] Explicit alternatives recorded in plan steps (no autonomous selection)
+- [x] Plan lifecycle statuses and deterministic execution gate
+- [ ] Step outcome recording and failure-driven replanning proposals (explicit, non-autonomous)
 - [ ] Measurable planning benchmarks and failure/replanning scenarios
 ## M4 — Safe execution and tools
 - [ ] Typed tool registry and permission model

@@ -28,9 +28,14 @@ class SQLitePlanStoreTests(unittest.TestCase):
                 )
                 plans = store.list_plans(goal="Build app")
                 latest = store.latest_for_goal("Build app")
+                p1_after = store.get(p1.id)
 
             self.assertEqual(p2.version, 2)
             self.assertEqual(p2.parent_plan_id, p1.id)
+            self.assertEqual(p2.lifecycle_status, "active")
+            self.assertIsNotNone(p1_after)
+            assert p1_after is not None
+            self.assertEqual(p1_after.lifecycle_status, "superseded")
             self.assertEqual(len(plans), 2)
             self.assertIsNotNone(latest)
             assert latest is not None

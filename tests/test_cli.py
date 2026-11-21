@@ -147,6 +147,22 @@ class CLITests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertIn("Plan record:", out.getvalue())
 
+    def test_set_plan_lifecycle_command(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            plan_db = Path(tmp) / "plans.db"
+            out = io.StringIO()
+            with redirect_stdout(out):
+                main(["--plan-db", str(plan_db), "Track expenses"])
+            # fetch id via list
+            from digitalbrain.planning import SQLitePlanStore
+            with SQLitePlanStore(plan_db) as store:
+                plan_id = store.list_plans(limit=1)[0].id
+            cmd_out = io.StringIO()
+            with redirect_stdout(cmd_out):
+                code = main(["--plan-db", str(plan_db), "--set-plan-lifecycle", plan_id, "completed"])
+            self.assertEqual(code, 0)
+            self.assertIn("Lifecycle: completed", cmd_out.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -96,6 +96,11 @@ class DigitalBrainTests(unittest.TestCase):
                 self.assertIsNotNone(stored)
                 assert stored is not None
                 self.assertEqual(stored.status, "accepted_with_warnings")
+                self.assertEqual(stored.lifecycle_status, "active")
+                gate = stored.metadata.get("execution_gate", {})
+                self.assertEqual(gate.get("status"), "needs_review")
+                self.assertFalse(gate.get("executable"))
+                self.assertIn("plan.execution_gate", event_types)
 
     def test_replan_creates_new_plan_version(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

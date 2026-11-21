@@ -27,6 +27,7 @@ The project is developed incrementally. The first milestone is a small, testable
 - [x] Initial Core contracts/protocols for memory, knowledge, context, planner
 - [x] Append-only audit log baseline for goal/context/plan events
 - [x] Append-only plan version storage (`SQLitePlanStore`) with parent linkage
+- [x] Plan lifecycle status + deterministic execution gate (`needs_review` on blocked/warnings)
 
 ## Requirements
 
