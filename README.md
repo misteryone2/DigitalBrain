@@ -20,8 +20,10 @@ The project is developed incrementally. The first milestone is a small, testable
 - [x] Knowledge store baseline (SQLite facts: subject/predicate/object, provenance, confidence, correction/supersession)
 - [x] CLI knowledge commands (add/list/search/stats)
 - [x] Deterministic context assembly baseline (memory + knowledge snapshot in goal processing)
-- [ ] Knowledge/context use in planning decisions (still deterministic, testable)
-- [ ] Clear Core contracts/protocols and module boundaries
+- [x] Basic knowledge conflict detection surfaced in context
+- [x] Initial Core contracts/protocols for memory, knowledge, context
+- [ ] Conflict resolution policy and confidence-weighted context selection
+- [ ] Deterministic planning that consumes context signals with tests
 
 ## Requirements
 

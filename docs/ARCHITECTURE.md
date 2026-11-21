@@ -78,7 +78,11 @@ Technologies may evolve, but independence, modularity, verifiability, and safety
 ## Knowledge model (current)
 
 - **Canonical:** `SQLiteKnowledgeStore` (`knowledge_records`) for structured facts (`subject`, `predicate`, `object`) with provenance, confidence, metadata, and correction/supersession.
-- **Separation:** memory stores experiences/events; knowledge stores asserted facts. Integration into Core context/planning is planned and must be explicit and testable.
+- **Separation:** memory stores experiences/events; knowledge stores asserted facts. Core context assembly can include relevant facts and active conflicts; planning use remains deterministic and inspectable.
+
+## Core contracts (current)
+
+- `src/digitalbrain/core/contracts.py` defines Protocols for memory, knowledge, and context assembly. `DigitalBrain` accepts injected implementations, enabling controlled evolution without coupling Core to SQLite-specific classes.
 
 ## Current implementation boundary
 
