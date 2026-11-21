@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from digitalbrain.planning.lifecycle import evaluate_execution_gate, record_step_outcome
+
 
 @dataclass(frozen=True, slots=True)
 class PlanRecord:
@@ -221,6 +223,37 @@ class SQLitePlanStore:
         if record is None:  # pragma: no cover
             raise RuntimeError("Plan not found after update")
         return record
+
+    def record_step_outcome(
+        self,
+        plan_id: str,
+        step_id: str,
+        outcome: str,
+        *,
+        reason: str | None = None,
+    ) -> tuple[PlanRecord, dict[str, Any]]:
+        with self._connection:
+            row = self._get_row(plan_id)
+            if row is None:
+                raise ValueError(f"Unknown plan: {plan_id}")
+            record = self._row_to_record(row)
+            updated_steps, event = record_step_outcome(record.steps, step_id=step_id, outcome=outcome, reason=reason)
+            gate = evaluate_execution_gate(updated_steps, record.warnings)
+            metadata = dict(record.metadata)
+            metadata["execution_gate"] = gate.to_dict()
+            metadata["last_step_outcome"] = event
+            self._connection.execute(
+                "UPDATE plan_records SET steps_json = ?, metadata_json = ? WHERE id = ?",
+                (
+                    json.dumps(updated_steps, ensure_ascii=False),
+                    json.dumps(metadata, sort_keys=True, ensure_ascii=False),
+                    plan_id,
+                ),
+            )
+        updated = self.get(plan_id)
+        if updated is None:  # pragma: no cover
+            raise RuntimeError("Plan not found after update")
+        return updated, event
 
     def _set_lifecycle(self, plan_id: str, lifecycle_status: str, *, reason: str | None = None) -> None:
         row = self._get_row(plan_id)

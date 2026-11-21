@@ -61,6 +61,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Set lifecycle status for a plan record in --plan-db.",
     )
     parser.add_argument(
+        "--record-step-outcome",
+        nargs=3,
+        metavar=("PLAN_ID", "STEP_ID", "OUTCOME"),
+        help="Record step outcome (passed|failed|skipped) in --plan-db.",
+    )
+    parser.add_argument(
         "--list-audit",
         action="store_true",
         help="List audit events from --audit-db.",
@@ -211,7 +217,7 @@ def main(argv: list[str] | None = None) -> int:
         bool(args.correct_memory),
     ]
     knowledge_actions = [bool(args.add_fact), args.list_facts, args.knowledge_stats]
-    plan_actions = [args.list_plans, bool(args.get_plan), bool(args.replan), bool(args.set_plan_lifecycle)]
+    plan_actions = [args.list_plans, bool(args.get_plan), bool(args.replan), bool(args.set_plan_lifecycle), bool(args.record_step_outcome)]
     audit_actions = [args.list_audit]
     groups = [any(memory_actions), any(knowledge_actions), any(plan_actions), any(audit_actions)]
     if sum(1 for a in memory_actions if a) > 1:
@@ -221,7 +227,7 @@ def main(argv: list[str] | None = None) -> int:
     if sum(1 for a in knowledge_actions if a) > 1:
         parser.error("Use only one of --add-fact, --list-facts, or --knowledge-stats")
     if sum(1 for a in plan_actions if a) > 1:
-        parser.error("Use only one of --list-plans, --get-plan, --replan, or --set-plan-lifecycle")
+        parser.error("Use only one of --list-plans, --get-plan, --replan, --set-plan-lifecycle, or --record-step-outcome")
     if sum(groups) > 1:
         parser.error("Use memory, knowledge, plan, or audit commands separately")
 
@@ -256,6 +262,22 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
         print(f"Plan record: {rec.id}")
         print(f"Lifecycle: {rec.lifecycle_status}")
+        return 0
+
+    if args.record_step_outcome:
+        if not args.plan_db:
+            parser.error("--record-step-outcome requires --plan-db")
+        plan_id, step_id, outcome = args.record_step_outcome
+        with SQLitePlanStore(args.plan_db) as plans:
+            try:
+                rec, event = plans.record_step_outcome(plan_id, step_id, outcome, reason=args.reason)
+            except ValueError as exc:
+                print(f"Error: {exc}")
+                return 1
+        gate = rec.metadata.get("execution_gate", {}) if isinstance(rec.metadata, dict) else {}
+        print(f"Plan record: {rec.id}")
+        print(f"Step: {event['step_id']} outcome={event['outcome']}")
+        print(f"Execution gate: {gate.get('status')} executable={gate.get('executable')}")
         return 0
 
     if args.replan:

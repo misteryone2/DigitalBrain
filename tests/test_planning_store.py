@@ -41,6 +41,21 @@ class SQLitePlanStoreTests(unittest.TestCase):
             assert latest is not None
             self.assertEqual(latest.id, p2.id)
 
+    def test_record_step_outcome_updates_gate_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "plans.db"
+            with SQLitePlanStore(db) as store:
+                plan = store.save_plan(
+                    goal="Build app",
+                    status="accepted",
+                    steps=[{"id": "step-1", "title": "Do", "status": "pending"}],
+                    source="test",
+                )
+                updated, event = store.record_step_outcome(plan.id, "step-1", "failed", reason="test failed")
+                self.assertEqual(event["outcome"], "failed")
+                self.assertEqual(updated.metadata["last_step_outcome"]["step_id"], "step-1")
+                self.assertIn("execution_gate", updated.metadata)
+
     def test_rejects_invalid_plan(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             db = Path(tmp) / "plans.db"
