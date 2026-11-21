@@ -26,6 +26,7 @@ The project is developed incrementally. The first milestone is a small, testable
 - [x] Planner extracted as contract (`PlannerProtocol`) with deterministic implementation
 - [x] Initial Core contracts/protocols for memory, knowledge, context, planner
 - [x] Append-only audit log baseline for goal/context/plan events
+- [x] Append-only plan version storage (`SQLitePlanStore`) with parent linkage
 
 ## Requirements
 
@@ -46,7 +47,7 @@ The project is developed incrementally. The first milestone is a small, testable
     digitalbrain --knowledge-db .\data\knowledge.db --add-fact DigitalBrain uses SQLite --fact-source docs
     digitalbrain --knowledge-db .\data\knowledge.db --list-facts
     digitalbrain --knowledge-db .\data\knowledge.db --knowledge-stats
-    digitalbrain --memory-db .\data\memory.db --knowledge-db .\data\knowledge.db --audit-db .\data\audit.db "Improve Project database"
+    digitalbrain --memory-db .\data\memory.db --knowledge-db .\data\knowledge.db --audit-db .\data\audit.db --plan-db .\data\plans.db "Improve Project database"
 
 Run tests:
 

@@ -1,0 +1,50 @@
+"""Tests for SQLite plan store."""
+
+import tempfile
+import unittest
+from pathlib import Path
+
+from digitalbrain.planning.store import SQLitePlanStore
+
+
+class SQLitePlanStoreTests(unittest.TestCase):
+    def test_save_and_list_versions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "plans.db"
+            with SQLitePlanStore(db) as store:
+                p1 = store.save_plan(
+                    goal="Build app",
+                    status="accepted",
+                    steps=[{"id": "step-1", "title": "Clarify"}],
+                    source="test",
+                )
+                p2 = store.save_plan(
+                    goal="Build app",
+                    status="accepted_with_warnings",
+                    steps=[{"id": "step-1", "title": "Clarify"}],
+                    source="test",
+                    parent_plan_id=p1.id,
+                    warnings=["conflict"],
+                )
+                plans = store.list_plans(goal="Build app")
+                latest = store.latest_for_goal("Build app")
+
+            self.assertEqual(p2.version, 2)
+            self.assertEqual(p2.parent_plan_id, p1.id)
+            self.assertEqual(len(plans), 2)
+            self.assertIsNotNone(latest)
+            assert latest is not None
+            self.assertEqual(latest.id, p2.id)
+
+    def test_rejects_invalid_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "plans.db"
+            with SQLitePlanStore(db) as store:
+                with self.assertRaises(ValueError):
+                    store.save_plan(goal=" ", status="accepted", steps=[{"id": "s1"}], source="test")
+                with self.assertRaises(ValueError):
+                    store.save_plan(goal="g", status="accepted", steps=[], source="test")
+
+
+if __name__ == "__main__":
+    unittest.main()

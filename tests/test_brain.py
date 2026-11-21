@@ -9,6 +9,7 @@ from digitalbrain.core.brain import DigitalBrain, GoalStatus
 from digitalbrain.core.intent import IntentType
 from digitalbrain.knowledge import SQLiteKnowledgeStore
 from digitalbrain.memory import MemoryType, SQLiteMemoryStore
+from digitalbrain.planning import SQLitePlanStore
 
 
 class DigitalBrainTests(unittest.TestCase):
@@ -70,10 +71,11 @@ class DigitalBrainTests(unittest.TestCase):
             mem_db = Path(tmp) / "memory.db"
             know_db = Path(tmp) / "knowledge.db"
             audit_db = Path(tmp) / "audit.db"
-            with SQLiteMemoryStore(mem_db) as memory, SQLiteKnowledgeStore(know_db) as knowledge, AuditLog(audit_db) as audit:
+            plan_db = Path(tmp) / "plans.db"
+            with SQLiteMemoryStore(mem_db) as memory, SQLiteKnowledgeStore(know_db) as knowledge, AuditLog(audit_db) as audit, SQLitePlanStore(plan_db) as plans:
                 knowledge.add_fact("Project", "uses", "SQLite", source="docs", confidence=0.9)
                 knowledge.add_fact("Project", "uses", "MySQL", source="old", confidence=0.2)
-                brain = DigitalBrain(memory=memory, knowledge=knowledge, audit_log=audit)
+                brain = DigitalBrain(memory=memory, knowledge=knowledge, audit_log=audit, plan_store=plans)
                 result = brain.process_goal("Improve Project database")
 
                 self.assertEqual(result.status, GoalStatus.ACCEPTED_WITH_WARNINGS)
@@ -84,11 +86,16 @@ class DigitalBrainTests(unittest.TestCase):
                 self.assertTrue(result.warnings)
                 self.assertTrue(result.plan_steps)
                 self.assertTrue(any(s.status.value == "blocked" for s in result.plan_steps))
+                self.assertIsNotNone(result.plan_record_id)
                 events = audit.list_events()
                 event_types = {e.event_type for e in events}
                 self.assertIn("plan.generated", event_types)
                 self.assertIn("goal.processed", event_types)
                 self.assertIn("context.conflict_detected", event_types)
+                stored = plans.get(result.plan_record_id) if result.plan_record_id else None
+                self.assertIsNotNone(stored)
+                assert stored is not None
+                self.assertEqual(stored.status, "accepted_with_warnings")
 
 
 if __name__ == "__main__":

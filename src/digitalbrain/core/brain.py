@@ -17,6 +17,7 @@ from digitalbrain.core.contracts import (
     KnowledgeStoreProtocol,
     MemoryStoreProtocol,
     PlannerProtocol,
+    PlanStoreProtocol,
 )
 from digitalbrain.core.intent import (
     IntentClassifier,
@@ -26,6 +27,7 @@ from digitalbrain.core.intent import (
 from digitalbrain.core.planner import DeterministicPlanner, Plan, PlanStep
 from digitalbrain.knowledge import SQLiteKnowledgeStore
 from digitalbrain.memory import MemoryType, SQLiteMemoryStore
+from digitalbrain.planning import SQLitePlanStore
 
 
 class GoalStatus(StrEnum):
@@ -42,6 +44,7 @@ class GoalResult:
     context_summary: dict[str, int] | None = None
     plan_steps: tuple[PlanStep, ...] = ()
     warnings: tuple[str, ...] = ()
+    plan_record_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +64,7 @@ class DigitalBrain:
         knowledge: KnowledgeStoreProtocol | SQLiteKnowledgeStore | None = None,
         context_assembler: ContextAssemblerProtocol | None = None,
         planner: PlannerProtocol | None = None,
+        plan_store: PlanStoreProtocol | SQLitePlanStore | None = None,
         audit_log: AuditLog | None = None,
     ) -> None:
         self.intent_classifier = IntentClassifier()
@@ -68,6 +72,7 @@ class DigitalBrain:
         self._knowledge = knowledge
         self._context = context_assembler or ContextAssembler(memory=memory, knowledge=knowledge)
         self._planner = planner or DeterministicPlanner()
+        self._plan_store = plan_store
         self._audit = audit_log
 
     def process_message(self, message: str) -> MessageResult:
@@ -144,6 +149,7 @@ class DigitalBrain:
         )
 
         memory_record_id = None
+        plan_record_id = None
         if self._memory is not None:
             record = self._memory.add_record(
                 normalized_goal,
@@ -162,10 +168,28 @@ class DigitalBrain:
                         "knowledge_conflicts": len(context.knowledge_conflicts),
                     },
                     "context_notes": list(context.context_notes),
-                    "plan": [step.__dict__ for step in plan_obj.steps],
+                    "plan": [self._step_to_dict(step) for step in plan_obj.steps],
                 },
             )
             memory_record_id = record.id
+        if self._plan_store is not None:
+            parent = self._plan_store.latest_for_goal(normalized_goal)
+            plan_record = self._plan_store.save_plan(
+                goal=normalized_goal,
+                status=status.value,
+                steps=[self._step_to_dict(step) for step in plan_obj.steps],
+                source="core.process_goal",
+                warnings=list(plan_obj.warnings),
+                context_summary={
+                    "recent_goals": len(context.recent_goals),
+                    "relevant_memories": len(context.relevant_memories),
+                    "relevant_facts": len(context.relevant_facts),
+                    "selected_facts": len(context.selected_facts),
+                    "knowledge_conflicts": len(context.knowledge_conflicts),
+                },
+                parent_plan_id=parent.id if parent else None,
+            )
+            plan_record_id = plan_record.id
         if self._audit is not None:
             if context.knowledge_conflicts:
                 self._audit.record(
@@ -195,6 +219,7 @@ class DigitalBrain:
                 details={
                     "goal": normalized_goal,
                     "memory_record_id": memory_record_id,
+                    "plan_record_id": plan_record_id,
                     "plan_steps": len(plan),
                     "warnings": list(plan_obj.warnings),
                     "context_summary": {
@@ -220,4 +245,17 @@ class DigitalBrain:
             },
             plan_steps=plan_obj.steps,
             warnings=plan_obj.warnings,
+            plan_record_id=plan_record_id,
         )
+
+    @staticmethod
+    def _step_to_dict(step: PlanStep) -> dict[str, object]:
+        return {
+            "id": step.id,
+            "title": step.title,
+            "description": step.description,
+            "verification": step.verification,
+            "status": step.status.value,
+            "depends_on": list(step.depends_on),
+            "source_rule": step.source_rule,
+        }

@@ -33,7 +33,8 @@ This roadmap turns the [founding vision](VISION.md) into incremental, verifiable
 - [x] Internal deterministic planning interface (`PlannerProtocol`, no external LLM dependency)
 - [x] Structured plans with states, dependencies, verification, source rules
 - [x] Conflict-aware warnings and blocked validation steps
-- [ ] Alternative evaluation and plan revision/replanning
+- [x] Append-only plan version storage for replanning history
+- [ ] Alternative evaluation and plan revision/replanning workflow
 - [ ] Measurable planning benchmarks
 ## M4 — Safe execution and tools
 - [ ] Typed tool registry and permission model

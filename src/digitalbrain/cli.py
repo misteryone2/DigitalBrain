@@ -8,6 +8,7 @@ from digitalbrain.core.audit import AuditLog
 from digitalbrain.core.brain import DigitalBrain
 from digitalbrain.knowledge import SQLiteKnowledgeStore
 from digitalbrain.memory import MemoryType, SQLiteMemoryStore
+from digitalbrain.planning import SQLitePlanStore
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -31,6 +32,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--audit-db",
         help="SQLite file for append-only audit events.",
+    )
+    parser.add_argument(
+        "--plan-db",
+        help="SQLite file for persisting plan versions.",
     )
     parser.add_argument(
         "--list-memory",
@@ -249,9 +254,17 @@ def main(argv: list[str] | None = None) -> int:
     memory = SQLiteMemoryStore(args.memory_db) if args.memory_db else None
     knowledge = SQLiteKnowledgeStore(args.knowledge_db) if args.knowledge_db else None
     audit = AuditLog(args.audit_db) if args.audit_db else None
+    plan_store = SQLitePlanStore(args.plan_db) if args.plan_db else None
     try:
-        result = DigitalBrain(memory=memory, knowledge=knowledge, audit_log=audit).process_goal(args.goal)
+        result = DigitalBrain(
+            memory=memory,
+            knowledge=knowledge,
+            audit_log=audit,
+            plan_store=plan_store,
+        ).process_goal(args.goal)
     finally:
+        if plan_store is not None:
+            plan_store.close()
         if audit is not None:
             audit.close()
         if knowledge is not None:
@@ -263,6 +276,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Status: {result.status.value}")
     if result.memory_record_id:
         print(f"Memory record: {result.memory_record_id}")
+    if result.plan_record_id:
+        print(f"Plan record: {result.plan_record_id}")
     if result.warnings:
         print("Warnings:")
         for warning in result.warnings:
