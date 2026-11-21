@@ -67,6 +67,8 @@ class SQLiteMemoryStore:
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
         self.close()
 
+    SCHEMA_VERSION = 1
+
     def _initialize(self) -> None:
         self._connection.execute(
             """
@@ -97,6 +99,14 @@ class SQLiteMemoryStore:
             ON memory_records(superseded_by)
             """
         )
+        current_version = self._connection.execute("PRAGMA user_version").fetchone()[0]
+        if current_version == 0:
+            self._connection.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
+        elif current_version != self.SCHEMA_VERSION:
+            raise RuntimeError(
+                f"Unsupported memory schema version {current_version}; "
+                f"expected {self.SCHEMA_VERSION}"
+            )
         self._connection.commit()
 
     def add_record(
@@ -175,6 +185,7 @@ class SQLiteMemoryStore:
         memory_type: MemoryType | str | None = None,
         source: str | None = None,
         include_superseded: bool = False,
+        search: str | None = None,
     ) -> list[MemoryRecord]:
         if limit <= 0:
             raise ValueError("Limit must be greater than zero.")
@@ -193,6 +204,12 @@ class SQLiteMemoryStore:
                 raise ValueError("Source filter must not be empty.")
             query.append("AND source = ?")
             params.append(normalized_source)
+        if search is not None:
+            normalized_search = search.strip()
+            if not normalized_search:
+                raise ValueError("Search must not be empty.")
+            query.append("AND content LIKE ?")
+            params.append(f"%{normalized_search}%")
         if not include_superseded:
             query.append("AND superseded_by IS NULL")
         query.append("ORDER BY created_at DESC, rowid DESC LIMIT ?")
@@ -200,6 +217,60 @@ class SQLiteMemoryStore:
 
         rows = self._connection.execute("\n".join(query), params).fetchall()
         return [self._row_to_record(row) for row in rows]
+
+    def count_records(
+        self,
+        *,
+        memory_type: MemoryType | str | None = None,
+        source: str | None = None,
+        include_superseded: bool = False,
+        search: str | None = None,
+    ) -> int:
+        query = ["SELECT COUNT(*) AS c FROM memory_records WHERE 1=1"]
+        params: list[Any] = []
+        if memory_type is not None:
+            record_type = (
+                memory_type.value if isinstance(memory_type, MemoryType) else str(memory_type)
+            )
+            query.append("AND memory_type = ?")
+            params.append(record_type)
+        if source is not None:
+            normalized_source = source.strip()
+            if not normalized_source:
+                raise ValueError("Source filter must not be empty.")
+            query.append("AND source = ?")
+            params.append(normalized_source)
+        if search is not None:
+            normalized_search = search.strip()
+            if not normalized_search:
+                raise ValueError("Search must not be empty.")
+            query.append("AND content LIKE ?")
+            params.append(f"%{normalized_search}%")
+        if not include_superseded:
+            query.append("AND superseded_by IS NULL")
+        row = self._connection.execute("\n".join(query), params).fetchone()
+        return int(row["c"]) if row else 0
+
+    def stats(self) -> dict[str, Any]:
+        total = self.count_records(include_superseded=True)
+        active = self.count_records(include_superseded=False)
+        by_type_rows = self._connection.execute(
+            """
+            SELECT memory_type, COUNT(*) AS c
+            FROM memory_records
+            WHERE superseded_by IS NULL
+            GROUP BY memory_type
+            ORDER BY memory_type
+            """
+        ).fetchall()
+        by_type = {row["memory_type"]: int(row["c"]) for row in by_type_rows}
+        return {
+            "schema_version": self.SCHEMA_VERSION,
+            "total_records": total,
+            "active_records": active,
+            "superseded_records": total - active,
+            "active_by_type": by_type,
+        }
 
     def correct(
         self,

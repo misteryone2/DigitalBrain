@@ -28,6 +28,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="List memory records from --memory-db instead of processing a goal.",
     )
     parser.add_argument(
+        "--memory-stats",
+        action="store_true",
+        help="Show memory statistics from --memory-db.",
+    )
+    parser.add_argument(
+        "--get-memory",
+        help="Fetch a specific memory record by id from --memory-db.",
+    )
+    parser.add_argument(
+        "--search-memory",
+        help="Search memory records by content substring.",
+    )
+    parser.add_argument(
         "--memory-type",
         choices=[m.value for m in MemoryType],
         help="Filter listed memory records by type.",
@@ -41,9 +54,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--include-superseded",
         action="store_true",
-        help="Include superseded memory records when listing.",
+        help="Include superseded memory records when listing/searching.",
     )
     return parser
+
+
+def _print_record(record: object) -> None:
+    state = "active" if record.is_active else f"superseded-by={record.superseded_by}"
+    print(f"[{record.created_at}] {record.id} {record.memory_type} {state}")
+    print(f"  source: {record.source}")
+    print(f"  confidence: {record.confidence}")
+    print(f"  content: {record.content}")
+    if record.supersedes:
+        print(f"  supersedes: {record.supersedes}")
+    if record.metadata:
+        print(f"  metadata: {record.metadata}")
 
 
 def _print_memory_records(store: SQLiteMemoryStore, args: argparse.Namespace) -> int:
@@ -51,21 +76,13 @@ def _print_memory_records(store: SQLiteMemoryStore, args: argparse.Namespace) ->
         limit=args.limit,
         memory_type=args.memory_type,
         include_superseded=args.include_superseded,
+        search=args.search_memory,
     )
     if not records:
         print("No memory records found.")
         return 0
-
     for record in records:
-        state = "active" if record.is_active else f"superseded-by={record.superseded_by}"
-        print(f"[{record.created_at}] {record.id} {record.memory_type} {state}")
-        print(f"  source: {record.source}")
-        print(f"  confidence: {record.confidence}")
-        print(f"  content: {record.content}")
-        if record.supersedes:
-            print(f"  supersedes: {record.supersedes}")
-        if record.metadata:
-            print(f"  metadata: {record.metadata}")
+        _print_record(record)
     return 0
 
 
@@ -73,10 +90,26 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    if args.list_memory:
+    memory_actions = [args.list_memory, args.memory_stats, bool(args.get_memory)]
+    if sum(1 for a in memory_actions if a) > 1:
+        parser.error("Use only one of --list-memory, --memory-stats, or --get-memory")
+
+    if args.list_memory or args.memory_stats or args.get_memory:
         if not args.memory_db:
-            parser.error("--list-memory requires --memory-db")
+            parser.error("Memory inspection commands require --memory-db")
         with SQLiteMemoryStore(args.memory_db) as memory:
+            if args.memory_stats:
+                stats = memory.stats()
+                for key, value in stats.items():
+                    print(f"{key}: {value}")
+                return 0
+            if args.get_memory:
+                record = memory.get(args.get_memory)
+                if record is None:
+                    print(f"Memory record not found: {args.get_memory}")
+                    return 1
+                _print_record(record)
+                return 0
             return _print_memory_records(memory, args)
 
     if not args.goal:

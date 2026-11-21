@@ -16,7 +16,8 @@ This roadmap turns the [founding vision](VISION.md) into incremental, verifiable
 - [x] Core integration for recording goal processing events
 - [x] CLI support for memory persistence and inspection
 - [x] Legacy episodic store removed; `SQLiteMemoryStore` is the single canonical memory model
-- [ ] Memory API hardening: search/stats CLI, schema versioning/migrations
+- [x] Memory API hardening: search/stats/get CLI, schema versioning (`PRAGMA user_version`)
+- [ ] Memory migrations beyond v1 and richer query/indexing (FTS, pagination)
 
 ## M2 — Knowledge and context
 - [ ] Structured knowledge records/facts with provenance

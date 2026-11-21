@@ -97,6 +97,25 @@ class SQLiteMemoryStoreTests(unittest.TestCase):
             self.assertEqual(len(cli_goals), 1)
             self.assertEqual(cli_goals[0].content, "goal")
 
+    def test_search_count_and_stats(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "memory.db"
+            with SQLiteMemoryStore(db_path) as store:
+                first = store.add_record("build sqlite memory", memory_type=MemoryType.GOAL, source="cli")
+                store.add_record("write tests", memory_type=MemoryType.OUTCOME, source="test")
+                store.correct(first.id, "build sqlite memory store", source="cli")
+
+                found = store.list_records(search="sqlite")
+                self.assertEqual(len(found), 1)
+                self.assertIn("store", found[0].content)
+                self.assertEqual(store.count_records(search="sqlite", include_superseded=True), 2)
+
+                stats = store.stats()
+                self.assertEqual(stats["schema_version"], 1)
+                self.assertEqual(stats["total_records"], 3)
+                self.assertEqual(stats["active_records"], 2)
+                self.assertEqual(stats["superseded_records"], 1)
+
     def test_rejects_invalid_record(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "memory.db"
@@ -111,6 +130,10 @@ class SQLiteMemoryStoreTests(unittest.TestCase):
                     store.list_records(limit=0)
                 with self.assertRaises(ValueError):
                     store.list_records(source=" ")
+                with self.assertRaises(ValueError):
+                    store.list_records(search=" ")
+                with self.assertRaises(ValueError):
+                    store.count_records(search="   ")
 
 
 if __name__ == "__main__":
