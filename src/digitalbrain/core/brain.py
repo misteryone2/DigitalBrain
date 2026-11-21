@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from digitalbrain.core.audit import AuditLog
 from digitalbrain.core.context import ContextAssembler
 from digitalbrain.core.contracts import (
     ContextAssemblerProtocol,
@@ -54,11 +55,13 @@ class DigitalBrain:
         memory: MemoryStoreProtocol | SQLiteMemoryStore | None = None,
         knowledge: KnowledgeStoreProtocol | SQLiteKnowledgeStore | None = None,
         context_assembler: ContextAssemblerProtocol | None = None,
+        audit_log: AuditLog | None = None,
     ) -> None:
         self.intent_classifier = IntentClassifier()
         self._memory = memory
         self._knowledge = knowledge
         self._context = context_assembler or ContextAssembler(memory=memory, knowledge=knowledge)
+        self._audit = audit_log
 
     def process_message(self, message: str) -> MessageResult:
         normalized_message = message.strip()
@@ -125,13 +128,30 @@ class DigitalBrain:
             raise ValueError("The goal must not be empty.")
 
         context = self._context.assemble(normalized_goal)
-        plan = (
+        plan_steps = [
             "Clarify the desired outcome and define measurable success criteria.",
             "Identify constraints, available resources, and potential risks.",
-            "Break the objective into small, independently verifiable tasks.",
-            "Choose an approach and implement the smallest useful first step.",
-            "Run checks, evaluate the results, and record what was learned.",
+        ]
+        if context.relevant_facts:
+            plan_steps.append(
+                f"Review {len(context.selected_facts)} selected knowledge fact(s) relevant to the goal."
+            )
+        if context.knowledge_conflicts:
+            plan_steps.append(
+                f"Resolve {len(context.knowledge_conflicts)} knowledge conflict(s) before relying on affected facts."
+            )
+        if context.recent_goals:
+            plan_steps.append(
+                f"Consider {len(context.recent_goals)} recent related goal(s) to avoid duplicate work."
+            )
+        plan_steps.extend(
+            [
+                "Break the objective into small, independently verifiable tasks.",
+                "Choose an approach and implement the smallest useful first step.",
+                "Run checks, evaluate the results, and record what was learned.",
+            ]
         )
+        plan = tuple(plan_steps)
         memory_record_id = None
         if self._memory is not None:
             record = self._memory.add_record(
@@ -146,11 +166,31 @@ class DigitalBrain:
                         "recent_goals": len(context.recent_goals),
                         "relevant_memories": len(context.relevant_memories),
                         "relevant_facts": len(context.relevant_facts),
+                        "selected_facts": len(context.selected_facts),
+                        "knowledge_conflicts": len(context.knowledge_conflicts),
+                    },
+                    "context_notes": list(context.context_notes),
+                },
+            )
+            memory_record_id = record.id
+        if self._audit is not None:
+            self._audit.record(
+                "goal.processed",
+                actor="DigitalBrain",
+                outcome=GoalStatus.ACCEPTED.value,
+                details={
+                    "goal": normalized_goal,
+                    "memory_record_id": memory_record_id,
+                    "plan_steps": len(plan),
+                    "context_summary": {
+                        "recent_goals": len(context.recent_goals),
+                        "relevant_memories": len(context.relevant_memories),
+                        "relevant_facts": len(context.relevant_facts),
+                        "selected_facts": len(context.selected_facts),
                         "knowledge_conflicts": len(context.knowledge_conflicts),
                     },
                 },
             )
-            memory_record_id = record.id
         return GoalResult(
             goal=normalized_goal,
             status=GoalStatus.ACCEPTED,
@@ -160,6 +200,7 @@ class DigitalBrain:
                 "recent_goals": len(context.recent_goals),
                 "relevant_memories": len(context.relevant_memories),
                 "relevant_facts": len(context.relevant_facts),
+                "selected_facts": len(context.selected_facts),
                 "knowledge_conflicts": len(context.knowledge_conflicts),
             },
         )

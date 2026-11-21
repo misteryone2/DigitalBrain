@@ -4,8 +4,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from digitalbrain.core.audit import AuditLog
 from digitalbrain.core.brain import DigitalBrain, GoalStatus
 from digitalbrain.core.intent import IntentType
+from digitalbrain.knowledge import SQLiteKnowledgeStore
 from digitalbrain.memory import MemoryType, SQLiteMemoryStore
 
 
@@ -62,6 +64,24 @@ class DigitalBrainTests(unittest.TestCase):
             self.assertEqual(records[0].content, "Ciao")
             self.assertEqual(records[0].source, "core.process_message")
             self.assertEqual(records[0].metadata["intent"], "conversation")
+
+    def test_context_aware_plan_and_audit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            mem_db = Path(tmp) / "memory.db"
+            know_db = Path(tmp) / "knowledge.db"
+            audit_db = Path(tmp) / "audit.db"
+            with SQLiteMemoryStore(mem_db) as memory, SQLiteKnowledgeStore(know_db) as knowledge, AuditLog(audit_db) as audit:
+                knowledge.add_fact("Project", "uses", "SQLite", source="docs", confidence=0.9)
+                knowledge.add_fact("Project", "uses", "MySQL", source="old", confidence=0.2)
+                brain = DigitalBrain(memory=memory, knowledge=knowledge, audit_log=audit)
+                result = brain.process_goal("Improve Project database")
+
+                self.assertIsNotNone(result.context_summary)
+                assert result.context_summary is not None
+                self.assertGreaterEqual(result.context_summary["knowledge_conflicts"], 1)
+                self.assertTrue(any("conflict" in step.lower() for step in result.plan))
+                events = audit.list_events()
+                self.assertEqual(events[0].event_type, "goal.processed")
 
 
 if __name__ == "__main__":

@@ -20,6 +20,8 @@ class ContextSnapshot:
     relevant_memories: tuple[dict[str, Any], ...]
     relevant_facts: tuple[dict[str, Any], ...]
     knowledge_conflicts: tuple[dict[str, Any], ...] = ()
+    selected_facts: tuple[dict[str, Any], ...] = ()
+    context_notes: tuple[str, ...] = ()
 
 
 class ContextAssembler:
@@ -59,20 +61,55 @@ class ContextAssembler:
                 )
 
         knowledge_conflicts: list[dict[str, Any]] = []
+        selected_facts: list[dict[str, Any]] = []
+        context_notes: list[str] = []
         if self._knowledge is not None:
             query = normalized.split()[0]
             for fact in self._knowledge.list_facts(search=query, limit=limit):
                 relevant_facts.append(
                     {
                         "id": fact.id,
+                        "subject": fact.subject,
+                        "predicate": fact.predicate,
+                        "object": fact.object,
                         "fact": fact.fact,
                         "source": fact.source,
                         "confidence": fact.confidence,
+                        "created_at": fact.created_at,
                     }
                 )
             for conflict in self._knowledge.find_conflicts(limit=limit):
                 if any(query.lower() in str(v).lower() for v in conflict.values()):
                     knowledge_conflicts.append(conflict)
+
+            # Deterministic policy: prefer highest confidence, then newest, then id.
+            grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+            for fact in relevant_facts:
+                grouped.setdefault((fact["subject"], fact["predicate"]), []).append(fact)
+            for key, facts in grouped.items():
+                ranked = sorted(
+                    facts,
+                    key=lambda f: (-float(f["confidence"]), f.get("created_at", ""), f["id"]),
+                    reverse=False,
+                )
+                # reverse=False with -confidence gives high confidence first; created_at asc means old first, so negate by using reverse sort separately
+                ranked = sorted(
+                    facts,
+                    key=lambda f: (float(f["confidence"]), f.get("created_at", ""), f["id"]),
+                    reverse=True,
+                )
+                chosen = dict(ranked[0])
+                chosen["selection_reason"] = "highest_confidence_then_newest_then_id"
+                selected_facts.append(chosen)
+                if len({f["object"] for f in facts}) > 1:
+                    context_notes.append(
+                        f"Conflict for {key[0]} {key[1]}: selected '{chosen['object']}' by deterministic policy; review required."
+                    )
+
+        if knowledge_conflicts:
+            context_notes.append(
+                f"{len(knowledge_conflicts)} relevant knowledge conflict(s) detected."
+            )
 
         return ContextSnapshot(
             goal=normalized,
@@ -80,4 +117,6 @@ class ContextAssembler:
             relevant_memories=tuple(relevant_memories),
             relevant_facts=tuple(relevant_facts),
             knowledge_conflicts=tuple(knowledge_conflicts),
+            selected_facts=tuple(selected_facts),
+            context_notes=tuple(dict.fromkeys(context_notes)),
         )
