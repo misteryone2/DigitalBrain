@@ -60,6 +60,34 @@ class CLITests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertIn("A fact", get_out.getvalue())
 
+    def test_search_and_correct_memory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "memory.db"
+            with SQLiteMemoryStore(db_path) as store:
+                record = store.add_record("Old fact", source="test")
+
+            search_out = io.StringIO()
+            with redirect_stdout(search_out):
+                code = main(["--memory-db", str(db_path), "--list-memory", "--search-memory", "Old"])
+            self.assertEqual(code, 0)
+            self.assertIn("Old fact", search_out.getvalue())
+
+            correct_out = io.StringIO()
+            with redirect_stdout(correct_out):
+                code = main([
+                    "--memory-db", str(db_path),
+                    "--correct-memory", record.id,
+                    "--content", "New fact",
+                    "--source", "cli",
+                ])
+            self.assertEqual(code, 0)
+            self.assertIn("Corrected record:", correct_out.getvalue())
+
+            with SQLiteMemoryStore(db_path) as store:
+                active = store.list_records(search="New")
+                self.assertEqual(len(active), 1)
+                self.assertEqual(active[0].source, "cli")
+
 
 if __name__ == "__main__":
     unittest.main()

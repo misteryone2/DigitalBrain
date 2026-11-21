@@ -41,6 +41,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Search memory records by content substring.",
     )
     parser.add_argument(
+        "--correct-memory",
+        help="Correct a memory record by id, creating a superseding record.",
+    )
+    parser.add_argument(
+        "--content",
+        help="New content when using --correct-memory.",
+    )
+    parser.add_argument(
+        "--source",
+        help="Source filter for listing, or source override for --correct-memory.",
+    )
+    parser.add_argument(
         "--memory-type",
         choices=[m.value for m in MemoryType],
         help="Filter listed memory records by type.",
@@ -75,6 +87,7 @@ def _print_memory_records(store: SQLiteMemoryStore, args: argparse.Namespace) ->
     records = store.list_records(
         limit=args.limit,
         memory_type=args.memory_type,
+        source=args.source,
         include_superseded=args.include_superseded,
         search=args.search_memory,
     )
@@ -90,9 +103,35 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    memory_actions = [args.list_memory, args.memory_stats, bool(args.get_memory)]
+    memory_actions = [
+        args.list_memory,
+        args.memory_stats,
+        bool(args.get_memory),
+        bool(args.correct_memory),
+    ]
     if sum(1 for a in memory_actions if a) > 1:
-        parser.error("Use only one of --list-memory, --memory-stats, or --get-memory")
+        parser.error(
+            "Use only one of --list-memory, --memory-stats, --get-memory, or --correct-memory"
+        )
+
+    if args.correct_memory:
+        if not args.memory_db:
+            parser.error("--correct-memory requires --memory-db")
+        if not args.content:
+            parser.error("--correct-memory requires --content")
+        with SQLiteMemoryStore(args.memory_db) as memory:
+            try:
+                record = memory.correct(
+                    args.correct_memory,
+                    args.content,
+                    source=args.source,
+                )
+            except ValueError as exc:
+                print(f"Error: {exc}")
+                return 1
+        print(f"Corrected record: {args.correct_memory}")
+        print(f"New record: {record.id}")
+        return 0
 
     if args.list_memory or args.memory_stats or args.get_memory:
         if not args.memory_db:
@@ -113,7 +152,7 @@ def main(argv: list[str] | None = None) -> int:
             return _print_memory_records(memory, args)
 
     if not args.goal:
-        parser.error("goal is required unless --list-memory is used")
+        parser.error("goal is required unless a memory command is used")
 
     memory = SQLiteMemoryStore(args.memory_db) if args.memory_db else None
     try:

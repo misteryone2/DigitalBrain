@@ -16,7 +16,7 @@ The project is developed incrementally. The first milestone is a small, testable
 - [x] CLI memory persistence and inspection
 - [x] Automated tests consolidated under `tests/`
 - [x] Legacy episodic store removed; canonical SQLite memory model
-- [x] Memory hardening (search/stats/get CLI, schema versioning)
+- [x] Memory hardening (search/stats/get/correct CLI, source filter, schema versioning)
 - [ ] Clear Core contracts/protocols and module boundaries
 - [ ] Knowledge/context layer (next milestone)
 
@@ -31,9 +31,11 @@ The project is developed incrementally. The first milestone is a small, testable
     digitalbrain "Create a simple personal finance application"
     digitalbrain --memory-db .\data\memory.db "Track expenses"
     digitalbrain --memory-db .\data\memory.db --list-memory
+    digitalbrain --memory-db .\data\memory.db --list-memory --source cli --memory-type goal
     digitalbrain --memory-db .\data\memory.db --search-memory expenses
     digitalbrain --memory-db .\data\memory.db --memory-stats
     digitalbrain --memory-db .\data\memory.db --get-memory <record-id>
+    digitalbrain --memory-db .\data\memory.db --correct-memory <record-id> --content "Updated fact" --source cli
 
 Run tests:
 
