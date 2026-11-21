@@ -34,8 +34,9 @@ This roadmap turns the [founding vision](VISION.md) into incremental, verifiable
 - [x] Structured plans with states, dependencies, verification, source rules
 - [x] Conflict-aware warnings and blocked validation steps
 - [x] Append-only plan version storage for replanning history
-- [ ] Alternative evaluation and plan revision/replanning workflow
-- [ ] Measurable planning benchmarks
+- [x] Explicit replanning command/workflow with audit trail
+- [x] Explicit alternatives recorded in plan steps (no autonomous selection)
+- [ ] Measurable planning benchmarks and failure/replanning scenarios
 ## M4 — Safe execution and tools
 - [ ] Typed tool registry and permission model
 - [ ] Read-only repository/system inspection tools

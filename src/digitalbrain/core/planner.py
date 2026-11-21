@@ -27,6 +27,7 @@ class PlanStep:
     status: StepStatus = StepStatus.PENDING
     depends_on: tuple[str, ...] = ()
     source_rule: str = "baseline"
+    alternatives: tuple[dict[str, str], ...] = ()
 
     def to_text(self) -> str:
         prefix = "[BLOCKED] " if self.status == StepStatus.BLOCKED else ""
@@ -69,6 +70,7 @@ class DeterministicPlanner:
             status: StepStatus = StepStatus.PENDING,
             depends_on: tuple[str, ...] = (),
             source_rule: str,
+            alternatives: tuple[dict[str, str], ...] = (),
         ) -> PlanStep:
             nonlocal n
             step = PlanStep(
@@ -79,6 +81,7 @@ class DeterministicPlanner:
                 status=status,
                 depends_on=depends_on,
                 source_rule=source_rule,
+                alternatives=alternatives,
             )
             steps.append(step)
             n += 1
@@ -120,6 +123,18 @@ class DeterministicPlanner:
                 "Conflicts are resolved or explicitly accepted with recorded rationale.",
                 status=StepStatus.BLOCKED,
                 source_rule="context.knowledge_conflicts",
+                alternatives=(
+                    {
+                        "id": "resolve-by-source",
+                        "title": "Verify authoritative source and correct knowledge",
+                        "reason": "Preferred when provenance can be verified.",
+                    },
+                    {
+                        "id": "defer-with-risk",
+                        "title": "Defer decision and record explicit risk",
+                        "reason": "Use only when verification is impossible now; keep conflict visible.",
+                    },
+                ),
             )
             conflict_step_id = conflict_step.id
 
@@ -145,6 +160,18 @@ class DeterministicPlanner:
             "First increment is implemented or clearly specified.",
             depends_on=breakdown_deps,
             source_rule="baseline.implement",
+            alternatives=(
+                {
+                    "id": "smallest-viable-step",
+                    "title": "Implement the smallest verifiable increment",
+                    "reason": "Default deterministic choice for low risk and fast feedback.",
+                },
+                {
+                    "id": "prototype-first",
+                    "title": "Build a throwaway prototype before implementation",
+                    "reason": "Use when uncertainty is high but prototype cost is low.",
+                },
+            ),
         )
         add(
             "Run checks, evaluate the results, and record what was learned.",

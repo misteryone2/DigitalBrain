@@ -49,6 +49,7 @@ The project is developed incrementally. The first milestone is a small, testable
     digitalbrain --knowledge-db .\data\knowledge.db --knowledge-stats
     digitalbrain --memory-db .\data\memory.db --knowledge-db .\data\knowledge.db --audit-db .\data\audit.db --plan-db .\data\plans.db "Improve Project database"
     digitalbrain --plan-db .\data\plans.db --list-plans
+    digitalbrain --plan-db .\data\plans.db --audit-db .\data\audit.db --replan "Improve Project database" --reason "resolved conflict"
     digitalbrain --audit-db .\data\audit.db --list-audit
 
 Run tests:

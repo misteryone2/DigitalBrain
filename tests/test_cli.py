@@ -130,6 +130,23 @@ class CLITests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertIn("plan.generated", audit_out.getvalue())
 
+    def test_replan_command(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            plan_db = Path(tmp) / "plans.db"
+            audit_db = Path(tmp) / "audit.db"
+            with redirect_stdout(io.StringIO()):
+                main(["--plan-db", str(plan_db), "--audit-db", str(audit_db), "Track expenses"])
+            out = io.StringIO()
+            with redirect_stdout(out):
+                code = main([
+                    "--plan-db", str(plan_db),
+                    "--audit-db", str(audit_db),
+                    "--replan", "Track expenses",
+                    "--reason", "new constraints",
+                ])
+            self.assertEqual(code, 0)
+            self.assertIn("Plan record:", out.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

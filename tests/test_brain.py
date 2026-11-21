@@ -97,6 +97,25 @@ class DigitalBrainTests(unittest.TestCase):
                 assert stored is not None
                 self.assertEqual(stored.status, "accepted_with_warnings")
 
+    def test_replan_creates_new_plan_version(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            plan_db = Path(tmp) / "plans.db"
+            audit_db = Path(tmp) / "audit.db"
+            with SQLitePlanStore(plan_db) as plans, AuditLog(audit_db) as audit:
+                brain = DigitalBrain(plan_store=plans, audit_log=audit)
+                first = brain.process_goal("Track expenses")
+                second = brain.replan_goal("Track expenses", reason="updated constraints")
+                self.assertIsNotNone(first.plan_record_id)
+                self.assertIsNotNone(second.plan_record_id)
+                assert first.plan_record_id and second.plan_record_id
+                p1 = plans.get(first.plan_record_id)
+                p2 = plans.get(second.plan_record_id)
+                assert p1 and p2
+                self.assertEqual(p2.version, p1.version + 1)
+                self.assertEqual(p2.parent_plan_id, p1.id)
+                event_types = {e.event_type for e in audit.list_events()}
+                self.assertIn("plan.replanned", event_types)
+
 
 if __name__ == "__main__":
     unittest.main()

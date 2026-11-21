@@ -87,9 +87,9 @@ Technologies may evolve, but independence, modularity, verifiability, and safety
 ## Context and audit (current)
 
 - **Context policy:** deterministic selection for facts in same subject/predicate: highest confidence, then newest, then id. Conflicts remain exposed in `knowledge_conflicts` and `context_notes`.
-- **Planning:** `PlannerProtocol` + `DeterministicPlanner` produce structured `PlanStep`s with status, dependencies, verification, and `source_rule`. Relevant conflicts yield warnings and `ACCEPTED_WITH_WARNINGS`; conflict-resolution steps are marked `blocked` and downstream steps depend on them. No opaque scoring.
+- **Planning:** `PlannerProtocol` + `DeterministicPlanner` produce structured `PlanStep`s with status, dependencies, verification, `source_rule`, and explicit `alternatives`. Relevant conflicts yield warnings and `ACCEPTED_WITH_WARNINGS`; conflict-resolution steps are marked `blocked` and downstream steps depend on them. No opaque scoring/automatic alternative selection.
 - **Plan storage:** `SQLitePlanStore` (`plan_records`) stores append-only plan versions with `version`, `parent_plan_id`, warnings, context summary, and step payloads for replanning/history.
-- **Audit:** `AuditLog` (`audit_events`) provides append-only trace with schema versioning. Current events: `context.conflict_detected`, `plan.generated`, `goal.processed`.
+- **Audit:** `AuditLog` (`audit_events`) provides append-only trace with schema versioning. Current events: `context.conflict_detected`, `plan.generated`, `plan.replanned`, `goal.processed`.
 
 ## Current implementation boundary
 

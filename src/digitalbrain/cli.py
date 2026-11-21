@@ -47,6 +47,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Get a plan record by id from --plan-db.",
     )
     parser.add_argument(
+        "--replan",
+        help="Create a new plan version for a goal using --plan-db (and optional context DBs).",
+    )
+    parser.add_argument(
+        "--reason",
+        help="Reason for --replan, recorded in audit/details.",
+    )
+    parser.add_argument(
         "--list-audit",
         action="store_true",
         help="List audit events from --audit-db.",
@@ -193,7 +201,7 @@ def main(argv: list[str] | None = None) -> int:
         bool(args.correct_memory),
     ]
     knowledge_actions = [bool(args.add_fact), args.list_facts, args.knowledge_stats]
-    plan_actions = [args.list_plans, bool(args.get_plan)]
+    plan_actions = [args.list_plans, bool(args.get_plan), bool(args.replan)]
     audit_actions = [args.list_audit]
     groups = [any(memory_actions), any(knowledge_actions), any(plan_actions), any(audit_actions)]
     if sum(1 for a in memory_actions if a) > 1:
@@ -203,7 +211,7 @@ def main(argv: list[str] | None = None) -> int:
     if sum(1 for a in knowledge_actions if a) > 1:
         parser.error("Use only one of --add-fact, --list-facts, or --knowledge-stats")
     if sum(1 for a in plan_actions if a) > 1:
-        parser.error("Use only one of --list-plans or --get-plan")
+        parser.error("Use only one of --list-plans, --get-plan, or --replan")
     if sum(groups) > 1:
         parser.error("Use memory, knowledge, plan, or audit commands separately")
 
@@ -224,6 +232,36 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
         print(f"Corrected record: {args.correct_memory}")
         print(f"New record: {record.id}")
+        return 0
+
+    if args.replan:
+        if not args.plan_db:
+            parser.error("--replan requires --plan-db")
+        memory = SQLiteMemoryStore(args.memory_db) if args.memory_db else None
+        knowledge = SQLiteKnowledgeStore(args.knowledge_db) if args.knowledge_db else None
+        audit = AuditLog(args.audit_db) if args.audit_db else None
+        try:
+            with SQLitePlanStore(args.plan_db) as plans:
+                brain = DigitalBrain(memory=memory, knowledge=knowledge, audit_log=audit, plan_store=plans)
+                result = brain.replan_goal(args.replan, reason=args.reason)
+        except ValueError as exc:
+            print(f"Error: {exc}")
+            return 1
+        finally:
+            if audit is not None:
+                audit.close()
+            if knowledge is not None:
+                knowledge.close()
+            if memory is not None:
+                memory.close()
+        print(f"Goal: {result.goal}")
+        print(f"Status: {result.status.value}")
+        if result.plan_record_id:
+            print(f"Plan record: {result.plan_record_id}")
+        if result.warnings:
+            print("Warnings:")
+            for warning in result.warnings:
+                print(f"- {warning}")
         return 0
 
     if args.list_plans or args.get_plan:
@@ -312,7 +350,7 @@ def main(argv: list[str] | None = None) -> int:
             return _print_memory_records(memory, args)
 
     if not args.goal:
-        parser.error("goal is required unless a memory or knowledge command is used")
+        parser.error("goal is required unless a memory, knowledge, plan, or audit command is used")
 
     memory = SQLiteMemoryStore(args.memory_db) if args.memory_db else None
     knowledge = SQLiteKnowledgeStore(args.knowledge_db) if args.knowledge_db else None

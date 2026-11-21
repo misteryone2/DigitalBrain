@@ -135,10 +135,17 @@ class DigitalBrain:
 
     def process_goal(self, goal: str) -> GoalResult:
         normalized_goal = goal.strip()
-
         if not normalized_goal:
             raise ValueError("The goal must not be empty.")
+        return self._build_goal_result(normalized_goal, reason=None, replanned=False)
 
+    def replan_goal(self, goal: str, *, reason: str | None = None) -> GoalResult:
+        normalized_goal = goal.strip()
+        if not normalized_goal:
+            raise ValueError("The goal must not be empty.")
+        return self._build_goal_result(normalized_goal, reason=reason, replanned=True)
+
+    def _build_goal_result(self, normalized_goal: str, *, reason: str | None, replanned: bool) -> GoalResult:
         context = self._context.assemble(normalized_goal)
         plan_obj: Plan = self._planner.plan(normalized_goal, context)
         plan = plan_obj.to_text_tuple()
@@ -178,7 +185,7 @@ class DigitalBrain:
                 goal=normalized_goal,
                 status=status.value,
                 steps=[self._step_to_dict(step) for step in plan_obj.steps],
-                source="core.process_goal",
+                source="core.replan_goal" if replanned else "core.process_goal",
                 warnings=list(plan_obj.warnings),
                 context_summary={
                     "recent_goals": len(context.recent_goals),
@@ -210,8 +217,21 @@ class DigitalBrain:
                     "plan_steps": len(plan),
                     "warnings": list(plan_obj.warnings),
                     "rules": [s.source_rule for s in plan_obj.steps],
+                    "replanned": replanned,
+                    "reason": reason,
                 },
             )
+            if replanned:
+                self._audit.record(
+                    "plan.replanned",
+                    actor="DigitalBrain",
+                    outcome=status.value,
+                    details={
+                        "goal": normalized_goal,
+                        "reason": reason,
+                        "plan_record_id": plan_record_id,
+                    },
+                )
             self._audit.record(
                 "goal.processed",
                 actor="DigitalBrain",
@@ -222,6 +242,8 @@ class DigitalBrain:
                     "plan_record_id": plan_record_id,
                     "plan_steps": len(plan),
                     "warnings": list(plan_obj.warnings),
+                    "replanned": replanned,
+                    "reason": reason,
                     "context_summary": {
                         "recent_goals": len(context.recent_goals),
                         "relevant_memories": len(context.relevant_memories),
@@ -258,4 +280,5 @@ class DigitalBrain:
             "status": step.status.value,
             "depends_on": list(step.depends_on),
             "source_rule": step.source_rule,
+            "alternatives": [dict(a) for a in step.alternatives],
         }

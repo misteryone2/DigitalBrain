@@ -29,6 +29,7 @@ class PlannerTests(unittest.TestCase):
         blocked = [s for s in plan.steps if s.status == StepStatus.BLOCKED]
         self.assertEqual(len(blocked), 1)
         self.assertIn("conflict", blocked[0].title.lower())
+        self.assertTrue(blocked[0].alternatives)
         # downstream steps depend on conflict resolution
         later = [s for s in plan.steps if s.source_rule.startswith("baseline.") and s.id != "step-1" and s.id != "step-2"]
         self.assertTrue(any(blocked[0].id in s.depends_on for s in later))
