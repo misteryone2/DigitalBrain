@@ -46,40 +46,64 @@ class ContextAssembler:
         relevant_memories: list[dict[str, Any]] = []
         relevant_facts: list[dict[str, Any]] = []
 
+        search_terms = [t.strip(".,:;!?()[]\"'") for t in normalized.split()]
+        search_terms = [t for t in search_terms if len(t) > 2]
+        if not search_terms:
+            search_terms = [normalized[:50]]
+
         if self._memory is not None:
             goals = self._memory.list_records(memory_type=MemoryType.GOAL, limit=limit)
             recent_goals = [r.content for r in goals if r.content != normalized][:limit]
-            for record in self._memory.list_records(search=normalized.split()[0], limit=limit):
-                relevant_memories.append(
-                    {
-                        "id": record.id,
-                        "type": record.memory_type,
-                        "content": record.content,
-                        "source": record.source,
-                        "confidence": record.confidence,
-                    }
-                )
+            seen_memory_ids: set[str] = set()
+            for term in search_terms:
+                for record in self._memory.list_records(search=term, limit=limit):
+                    if record.id in seen_memory_ids:
+                        continue
+                    seen_memory_ids.add(record.id)
+                    relevant_memories.append(
+                        {
+                            "id": record.id,
+                            "type": record.memory_type,
+                            "content": record.content,
+                            "source": record.source,
+                            "confidence": record.confidence,
+                        }
+                    )
+                    if len(relevant_memories) >= limit:
+                        break
+                if len(relevant_memories) >= limit:
+                    break
 
         knowledge_conflicts: list[dict[str, Any]] = []
         selected_facts: list[dict[str, Any]] = []
         context_notes: list[str] = []
         if self._knowledge is not None:
-            query = normalized.split()[0]
-            for fact in self._knowledge.list_facts(search=query, limit=limit):
-                relevant_facts.append(
-                    {
-                        "id": fact.id,
-                        "subject": fact.subject,
-                        "predicate": fact.predicate,
-                        "object": fact.object,
-                        "fact": fact.fact,
-                        "source": fact.source,
-                        "confidence": fact.confidence,
-                        "created_at": fact.created_at,
-                    }
-                )
+            seen_fact_ids: set[str] = set()
+            for term in search_terms:
+                for fact in self._knowledge.list_facts(search=term, limit=limit):
+                    if fact.id in seen_fact_ids:
+                        continue
+                    seen_fact_ids.add(fact.id)
+                    relevant_facts.append(
+                        {
+                            "id": fact.id,
+                            "subject": fact.subject,
+                            "predicate": fact.predicate,
+                            "object": fact.object,
+                            "fact": fact.fact,
+                            "source": fact.source,
+                            "confidence": fact.confidence,
+                            "created_at": fact.created_at,
+                        }
+                    )
+                    if len(relevant_facts) >= limit:
+                        break
+                if len(relevant_facts) >= limit:
+                    break
+            lowered_terms = [t.lower() for t in search_terms]
             for conflict in self._knowledge.find_conflicts(limit=limit):
-                if any(query.lower() in str(v).lower() for v in conflict.values()):
+                values = " ".join(str(v).lower() for v in conflict.values())
+                if any(t in values for t in lowered_terms):
                     knowledge_conflicts.append(conflict)
 
             # Deterministic policy: prefer highest confidence, then newest, then id.
