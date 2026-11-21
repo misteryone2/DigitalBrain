@@ -22,9 +22,10 @@ The project is developed incrementally. The first milestone is a small, testable
 - [x] Deterministic context assembly baseline (memory + knowledge snapshot in goal processing)
 - [x] Basic knowledge conflict detection surfaced in context
 - [x] Deterministic conflict policy: highest confidence, then newest, then id; conflicts still exposed
-- [x] Deterministic context-aware planning with tests
-- [x] Initial Core contracts/protocols for memory, knowledge, context
-- [x] Append-only audit log baseline for goal processing
+- [x] Deterministic context-aware planning with structured steps, warnings, and tests
+- [x] Planner extracted as contract (`PlannerProtocol`) with deterministic implementation
+- [x] Initial Core contracts/protocols for memory, knowledge, context, planner
+- [x] Append-only audit log baseline for goal/context/plan events
 
 ## Requirements
 
@@ -45,6 +46,7 @@ The project is developed incrementally. The first milestone is a small, testable
     digitalbrain --knowledge-db .\data\knowledge.db --add-fact DigitalBrain uses SQLite --fact-source docs
     digitalbrain --knowledge-db .\data\knowledge.db --list-facts
     digitalbrain --knowledge-db .\data\knowledge.db --knowledge-stats
+    digitalbrain --memory-db .\data\memory.db --knowledge-db .\data\knowledge.db --audit-db .\data\audit.db "Improve Project database"
 
 Run tests:
 

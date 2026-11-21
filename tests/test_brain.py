@@ -76,12 +76,19 @@ class DigitalBrainTests(unittest.TestCase):
                 brain = DigitalBrain(memory=memory, knowledge=knowledge, audit_log=audit)
                 result = brain.process_goal("Improve Project database")
 
+                self.assertEqual(result.status, GoalStatus.ACCEPTED_WITH_WARNINGS)
                 self.assertIsNotNone(result.context_summary)
                 assert result.context_summary is not None
                 self.assertGreaterEqual(result.context_summary["knowledge_conflicts"], 1)
                 self.assertTrue(any("conflict" in step.lower() for step in result.plan))
+                self.assertTrue(result.warnings)
+                self.assertTrue(result.plan_steps)
+                self.assertTrue(any(s.status.value == "blocked" for s in result.plan_steps))
                 events = audit.list_events()
-                self.assertEqual(events[0].event_type, "goal.processed")
+                event_types = {e.event_type for e in events}
+                self.assertIn("plan.generated", event_types)
+                self.assertIn("goal.processed", event_types)
+                self.assertIn("context.conflict_detected", event_types)
 
 
 if __name__ == "__main__":

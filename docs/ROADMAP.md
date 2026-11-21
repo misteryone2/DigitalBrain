@@ -27,14 +27,14 @@ This roadmap turns the [founding vision](VISION.md) into incremental, verifiable
 - [x] Basic confidence/conflict detection surfaced in context summary
 - [x] Deterministic conflict policy and confidence-weighted context selection
 - [x] Deterministic context-aware planning baseline with tests
-- [x] Append-only audit baseline
+- [x] Append-only audit baseline for context/plan/goal events
 
 ## M3 — Reasoning and planning
-- [ ] Internal reasoning/planning interfaces (no external LLM dependency)
-- [ ] Structured plans with validation and progress state
-- [ ] Alternative evaluation and plan revision
+- [x] Internal deterministic planning interface (`PlannerProtocol`, no external LLM dependency)
+- [x] Structured plans with states, dependencies, verification, source rules
+- [x] Conflict-aware warnings and blocked validation steps
+- [ ] Alternative evaluation and plan revision/replanning
 - [ ] Measurable planning benchmarks
-
 ## M4 — Safe execution and tools
 - [ ] Typed tool registry and permission model
 - [ ] Read-only repository/system inspection tools

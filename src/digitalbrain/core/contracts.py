@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
 
+from digitalbrain.core.planner import Plan
+
 
 @runtime_checkable
 class MemoryStoreProtocol(Protocol):
@@ -26,3 +28,8 @@ class KnowledgeStoreProtocol(Protocol):
 @runtime_checkable
 class ContextAssemblerProtocol(Protocol):
     def assemble(self, goal: str, *, limit: int = 5) -> Any: ...
+
+
+@runtime_checkable
+class PlannerProtocol(Protocol):
+    def plan(self, goal: str, context: Any) -> Plan: ...

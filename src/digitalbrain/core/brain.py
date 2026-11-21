@@ -16,18 +16,21 @@ from digitalbrain.core.contracts import (
     ContextAssemblerProtocol,
     KnowledgeStoreProtocol,
     MemoryStoreProtocol,
+    PlannerProtocol,
 )
 from digitalbrain.core.intent import (
     IntentClassifier,
     IntentResult,
     IntentType,
 )
+from digitalbrain.core.planner import DeterministicPlanner, Plan, PlanStep
 from digitalbrain.knowledge import SQLiteKnowledgeStore
 from digitalbrain.memory import MemoryType, SQLiteMemoryStore
 
 
 class GoalStatus(StrEnum):
     ACCEPTED = "accepted"
+    ACCEPTED_WITH_WARNINGS = "accepted_with_warnings"
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +40,8 @@ class GoalResult:
     plan: tuple[str, ...]
     memory_record_id: str | None = None
     context_summary: dict[str, int] | None = None
+    plan_steps: tuple[PlanStep, ...] = ()
+    warnings: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,12 +60,14 @@ class DigitalBrain:
         memory: MemoryStoreProtocol | SQLiteMemoryStore | None = None,
         knowledge: KnowledgeStoreProtocol | SQLiteKnowledgeStore | None = None,
         context_assembler: ContextAssemblerProtocol | None = None,
+        planner: PlannerProtocol | None = None,
         audit_log: AuditLog | None = None,
     ) -> None:
         self.intent_classifier = IntentClassifier()
         self._memory = memory
         self._knowledge = knowledge
         self._context = context_assembler or ContextAssembler(memory=memory, knowledge=knowledge)
+        self._planner = planner or DeterministicPlanner()
         self._audit = audit_log
 
     def process_message(self, message: str) -> MessageResult:
@@ -128,30 +135,14 @@ class DigitalBrain:
             raise ValueError("The goal must not be empty.")
 
         context = self._context.assemble(normalized_goal)
-        plan_steps = [
-            "Clarify the desired outcome and define measurable success criteria.",
-            "Identify constraints, available resources, and potential risks.",
-        ]
-        if context.relevant_facts:
-            plan_steps.append(
-                f"Review {len(context.selected_facts)} selected knowledge fact(s) relevant to the goal."
-            )
-        if context.knowledge_conflicts:
-            plan_steps.append(
-                f"Resolve {len(context.knowledge_conflicts)} knowledge conflict(s) before relying on affected facts."
-            )
-        if context.recent_goals:
-            plan_steps.append(
-                f"Consider {len(context.recent_goals)} recent related goal(s) to avoid duplicate work."
-            )
-        plan_steps.extend(
-            [
-                "Break the objective into small, independently verifiable tasks.",
-                "Choose an approach and implement the smallest useful first step.",
-                "Run checks, evaluate the results, and record what was learned.",
-            ]
+        plan_obj: Plan = self._planner.plan(normalized_goal, context)
+        plan = plan_obj.to_text_tuple()
+        status = (
+            GoalStatus.ACCEPTED_WITH_WARNINGS
+            if plan_obj.has_warnings
+            else GoalStatus.ACCEPTED
         )
-        plan = tuple(plan_steps)
+
         memory_record_id = None
         if self._memory is not None:
             record = self._memory.add_record(
@@ -160,8 +151,9 @@ class DigitalBrain:
                 source="core.process_goal",
                 confidence=1.0,
                 metadata={
-                    "status": GoalStatus.ACCEPTED.value,
+                    "status": status.value,
                     "plan_steps": len(plan),
+                    "warnings": list(plan_obj.warnings),
                     "context": {
                         "recent_goals": len(context.recent_goals),
                         "relevant_memories": len(context.relevant_memories),
@@ -170,18 +162,41 @@ class DigitalBrain:
                         "knowledge_conflicts": len(context.knowledge_conflicts),
                     },
                     "context_notes": list(context.context_notes),
+                    "plan": [step.__dict__ for step in plan_obj.steps],
                 },
             )
             memory_record_id = record.id
         if self._audit is not None:
+            if context.knowledge_conflicts:
+                self._audit.record(
+                    "context.conflict_detected",
+                    actor="DigitalBrain",
+                    outcome="warning",
+                    details={
+                        "goal": normalized_goal,
+                        "conflicts": len(context.knowledge_conflicts),
+                    },
+                )
+            self._audit.record(
+                "plan.generated",
+                actor="DeterministicPlanner",
+                outcome=status.value,
+                details={
+                    "goal": normalized_goal,
+                    "plan_steps": len(plan),
+                    "warnings": list(plan_obj.warnings),
+                    "rules": [s.source_rule for s in plan_obj.steps],
+                },
+            )
             self._audit.record(
                 "goal.processed",
                 actor="DigitalBrain",
-                outcome=GoalStatus.ACCEPTED.value,
+                outcome=status.value,
                 details={
                     "goal": normalized_goal,
                     "memory_record_id": memory_record_id,
                     "plan_steps": len(plan),
+                    "warnings": list(plan_obj.warnings),
                     "context_summary": {
                         "recent_goals": len(context.recent_goals),
                         "relevant_memories": len(context.relevant_memories),
@@ -193,7 +208,7 @@ class DigitalBrain:
             )
         return GoalResult(
             goal=normalized_goal,
-            status=GoalStatus.ACCEPTED,
+            status=status,
             plan=plan,
             memory_record_id=memory_record_id,
             context_summary={
@@ -203,4 +218,6 @@ class DigitalBrain:
                 "selected_facts": len(context.selected_facts),
                 "knowledge_conflicts": len(context.knowledge_conflicts),
             },
+            plan_steps=plan_obj.steps,
+            warnings=plan_obj.warnings,
         )

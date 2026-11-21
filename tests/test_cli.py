@@ -21,6 +21,7 @@ class CLITests(unittest.TestCase):
             self.assertEqual(code, 0)
             text = output.getvalue()
             self.assertIn("Goal: Track expenses", text)
+            self.assertIn("Status: accepted", text)
             self.assertIn("Memory record:", text)
 
             with SQLiteMemoryStore(db_path) as store:

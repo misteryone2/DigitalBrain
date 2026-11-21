@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 
+from digitalbrain.core.audit import AuditLog
 from digitalbrain.core.brain import DigitalBrain
 from digitalbrain.knowledge import SQLiteKnowledgeStore
 from digitalbrain.memory import MemoryType, SQLiteMemoryStore
@@ -26,6 +27,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--knowledge-db",
         help="SQLite file for persisting or reading knowledge facts.",
+    )
+    parser.add_argument(
+        "--audit-db",
+        help="SQLite file for append-only audit events.",
     )
     parser.add_argument(
         "--list-memory",
@@ -242,23 +247,33 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("goal is required unless a memory or knowledge command is used")
 
     memory = SQLiteMemoryStore(args.memory_db) if args.memory_db else None
+    knowledge = SQLiteKnowledgeStore(args.knowledge_db) if args.knowledge_db else None
+    audit = AuditLog(args.audit_db) if args.audit_db else None
     try:
-        result = DigitalBrain(memory=memory).process_goal(args.goal)
+        result = DigitalBrain(memory=memory, knowledge=knowledge, audit_log=audit).process_goal(args.goal)
     finally:
+        if audit is not None:
+            audit.close()
+        if knowledge is not None:
+            knowledge.close()
         if memory is not None:
             memory.close()
 
     print(f"Goal: {result.goal}")
-    print(f"Status: {result.status}")
+    print(f"Status: {result.status.value}")
     if result.memory_record_id:
         print(f"Memory record: {result.memory_record_id}")
+    if result.warnings:
+        print("Warnings:")
+        for warning in result.warnings:
+            print(f"- {warning}")
     print("\nInitial plan:")
     for index, step in enumerate(result.plan, start=1):
         print(f"{index}. {step}")
     print(
         "\nNote: this prototype uses a deterministic baseline planner and optional "
-        "SQLite memory. It does not yet perform autonomous reasoning, learning, "
-        "tool execution, or self-modification."
+        "SQLite memory/knowledge/audit. It does not yet perform autonomous reasoning, "
+        "learning, tool execution, or self-modification."
     )
     return 0
 
