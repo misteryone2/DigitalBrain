@@ -192,6 +192,47 @@ class SQLiteKnowledgeStore:
         rows = self._connection.execute("\n".join(query), params).fetchall()
         return [self._row_to_record(row) for row in rows]
 
+    def find_conflicts(self, *, limit: int = 100) -> list[dict[str, Any]]:
+        """Find active facts with same subject+predicate but different object."""
+        if limit <= 0:
+            raise ValueError("Limit must be greater than zero.")
+        rows = self._connection.execute(
+            """
+            SELECT subject, predicate
+            FROM knowledge_records
+            WHERE superseded_by IS NULL
+            GROUP BY subject, predicate
+            HAVING COUNT(DISTINCT object) > 1
+            ORDER BY subject, predicate
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        conflicts: list[dict[str, Any]] = []
+        for row in rows:
+            facts = self.list_facts(
+                subject=row["subject"],
+                predicate=row["predicate"],
+                include_superseded=False,
+                limit=100,
+            )
+            conflicts.append(
+                {
+                    "subject": row["subject"],
+                    "predicate": row["predicate"],
+                    "facts": [
+                        {
+                            "id": f.id,
+                            "object": f.object,
+                            "source": f.source,
+                            "confidence": f.confidence,
+                        }
+                        for f in facts
+                    ],
+                }
+            )
+        return conflicts
+
     def correct(
         self,
         record_id: str,

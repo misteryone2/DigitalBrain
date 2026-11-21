@@ -19,6 +19,7 @@ class ContextSnapshot:
     recent_goals: tuple[str, ...]
     relevant_memories: tuple[dict[str, Any], ...]
     relevant_facts: tuple[dict[str, Any], ...]
+    knowledge_conflicts: tuple[dict[str, Any], ...] = ()
 
 
 class ContextAssembler:
@@ -57,6 +58,7 @@ class ContextAssembler:
                     }
                 )
 
+        knowledge_conflicts: list[dict[str, Any]] = []
         if self._knowledge is not None:
             query = normalized.split()[0]
             for fact in self._knowledge.list_facts(search=query, limit=limit):
@@ -68,10 +70,14 @@ class ContextAssembler:
                         "confidence": fact.confidence,
                     }
                 )
+            for conflict in self._knowledge.find_conflicts(limit=limit):
+                if any(query.lower() in str(v).lower() for v in conflict.values()):
+                    knowledge_conflicts.append(conflict)
 
         return ContextSnapshot(
             goal=normalized,
             recent_goals=tuple(recent_goals),
             relevant_memories=tuple(relevant_memories),
             relevant_facts=tuple(relevant_facts),
+            knowledge_conflicts=tuple(knowledge_conflicts),
         )

@@ -140,6 +140,7 @@ class DigitalBrain:
                         "recent_goals": len(context.recent_goals),
                         "relevant_memories": len(context.relevant_memories),
                         "relevant_facts": len(context.relevant_facts),
+                        "knowledge_conflicts": len(context.knowledge_conflicts),
                     },
                 },
             )
@@ -153,5 +154,6 @@ class DigitalBrain:
                 "recent_goals": len(context.recent_goals),
                 "relevant_memories": len(context.relevant_memories),
                 "relevant_facts": len(context.relevant_facts),
+                "knowledge_conflicts": len(context.knowledge_conflicts),
             },
         )

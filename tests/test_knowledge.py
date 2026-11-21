@@ -57,6 +57,17 @@ class SQLiteKnowledgeStoreTests(unittest.TestCase):
             self.assertEqual(stats["active_facts"], 2)
             self.assertEqual(stats["schema_version"], 1)
 
+    def test_find_conflicts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "knowledge.db"
+            with SQLiteKnowledgeStore(db) as store:
+                store.add_fact("Project", "uses", "MySQL", source="a")
+                store.add_fact("Project", "uses", "SQLite", source="b")
+                conflicts = store.find_conflicts()
+            self.assertEqual(len(conflicts), 1)
+            self.assertEqual(conflicts[0]["subject"], "Project")
+            self.assertEqual(len(conflicts[0]["facts"]), 2)
+
     def test_rejects_invalid_fact(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             db = Path(tmp) / "knowledge.db"
