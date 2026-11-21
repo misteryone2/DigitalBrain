@@ -75,6 +75,11 @@ Technologies may evolve, but independence, modularity, verifiability, and safety
 - **Canonical:** `SQLiteMemoryStore` (`memory_records`) with typed records, confidence, metadata, and correction/supersession. This is the active persistence path for Core/CLI.
 - **Legacy removed:** the old `memory.episodic.MemoryStore` (`episodes`) was removed during the technical reset to avoid parallel memory models. Any episodic interaction data should flow through `SQLiteMemoryStore` with `memory_type="episodic"`.
 
+## Knowledge model (current)
+
+- **Canonical:** `SQLiteKnowledgeStore` (`knowledge_records`) for structured facts (`subject`, `predicate`, `object`) with provenance, confidence, metadata, and correction/supersession.
+- **Separation:** memory stores experiences/events; knowledge stores asserted facts. Integration into Core context/planning is planned and must be explicit and testable.
+
 ## Current implementation boundary
 
 The repository currently provides: goal/message intake, deterministic intent classification, deterministic baseline planning, optional SQLite memory persistence, CLI inspection, and unit tests. It does **not** yet provide autonomous reasoning, knowledge graph/context engine, learning from outcomes, tool execution, self-modification, or a dashboard connected to real runtime state. Those capabilities must be added incrementally and verified before being reported as implemented.

@@ -17,8 +17,10 @@ The project is developed incrementally. The first milestone is a small, testable
 - [x] Automated tests consolidated under `tests/`
 - [x] Legacy episodic store removed; canonical SQLite memory model
 - [x] Memory hardening (search/stats/get/correct CLI, source filter, schema versioning)
+- [x] Knowledge store baseline (SQLite facts: subject/predicate/object, provenance, confidence, correction/supersession)
+- [x] CLI knowledge commands (add/list/search/stats)
+- [ ] Knowledge integration into Core context/planning
 - [ ] Clear Core contracts/protocols and module boundaries
-- [ ] Knowledge/context layer (next milestone)
 
 ## Requirements
 
@@ -36,6 +38,9 @@ The project is developed incrementally. The first milestone is a small, testable
     digitalbrain --memory-db .\data\memory.db --memory-stats
     digitalbrain --memory-db .\data\memory.db --get-memory <record-id>
     digitalbrain --memory-db .\data\memory.db --correct-memory <record-id> --content "Updated fact" --source cli
+    digitalbrain --knowledge-db .\data\knowledge.db --add-fact DigitalBrain uses SQLite --fact-source docs
+    digitalbrain --knowledge-db .\data\knowledge.db --list-facts
+    digitalbrain --knowledge-db .\data\knowledge.db --knowledge-stats
 
 Run tests:
 

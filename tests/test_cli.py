@@ -88,6 +88,25 @@ class CLITests(unittest.TestCase):
                 self.assertEqual(len(active), 1)
                 self.assertEqual(active[0].source, "cli")
 
+    def test_add_and_list_knowledge_fact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "knowledge.db"
+            out = io.StringIO()
+            with redirect_stdout(out):
+                code = main([
+                    "--knowledge-db", str(db_path),
+                    "--add-fact", "DigitalBrain", "uses", "SQLite",
+                    "--fact-source", "docs",
+                ])
+            self.assertEqual(code, 0)
+            self.assertIn("DigitalBrain uses SQLite", out.getvalue())
+
+            list_out = io.StringIO()
+            with redirect_stdout(list_out):
+                code = main(["--knowledge-db", str(db_path), "--list-facts"])
+            self.assertEqual(code, 0)
+            self.assertIn("DigitalBrain uses SQLite", list_out.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()
