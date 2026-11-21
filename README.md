@@ -15,7 +15,8 @@ The project is developed incrementally. The first milestone is a small, testable
 - [x] SQLite memory store with traceable records and correction/supersession
 - [x] CLI memory persistence and inspection
 - [x] Automated tests consolidated under `tests/`
-- [ ] Memory hardening (search/stats CLI, schema versioning, legacy episodic deprecation)
+- [x] Legacy episodic store removed; canonical SQLite memory model
+- [ ] Memory hardening (search/stats CLI, schema versioning)
 - [ ] Clear Core contracts/protocols and module boundaries
 - [ ] Knowledge/context layer (next milestone)
 

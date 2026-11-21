@@ -72,8 +72,8 @@ Technologies may evolve, but independence, modularity, verifiability, and safety
 
 ## Memory model (current)
 
-- **Canonical (M1):** `SQLiteMemoryStore` (`memory_records`) with typed records, confidence, metadata, and correction/supersession. This is the active persistence path for Core/CLI.
-- **Legacy:** `memory.episodic.MemoryStore` (`episodes`) retained for backward compatibility; do not extend. Migrate or remove after dependents are updated.
+- **Canonical:** `SQLiteMemoryStore` (`memory_records`) with typed records, confidence, metadata, and correction/supersession. This is the active persistence path for Core/CLI.
+- **Legacy removed:** the old `memory.episodic.MemoryStore` (`episodes`) was removed during the technical reset to avoid parallel memory models. Any episodic interaction data should flow through `SQLiteMemoryStore` with `memory_type="episodic"`.
 
 ## Current implementation boundary
 
