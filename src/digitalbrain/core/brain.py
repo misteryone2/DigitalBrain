@@ -11,6 +11,11 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from digitalbrain.core.context import ContextAssembler
+from digitalbrain.core.contracts import (
+    ContextAssemblerProtocol,
+    KnowledgeStoreProtocol,
+    MemoryStoreProtocol,
+)
 from digitalbrain.core.intent import (
     IntentClassifier,
     IntentResult,
@@ -46,13 +51,14 @@ class DigitalBrain:
 
     def __init__(
         self,
-        memory: SQLiteMemoryStore | None = None,
-        knowledge: SQLiteKnowledgeStore | None = None,
+        memory: MemoryStoreProtocol | SQLiteMemoryStore | None = None,
+        knowledge: KnowledgeStoreProtocol | SQLiteKnowledgeStore | None = None,
+        context_assembler: ContextAssemblerProtocol | None = None,
     ) -> None:
         self.intent_classifier = IntentClassifier()
         self._memory = memory
         self._knowledge = knowledge
-        self._context = ContextAssembler(memory=memory, knowledge=knowledge)
+        self._context = context_assembler or ContextAssembler(memory=memory, knowledge=knowledge)
 
     def process_message(self, message: str) -> MessageResult:
         normalized_message = message.strip()
