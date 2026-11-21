@@ -49,20 +49,19 @@ class DigitalBrain:
         normalized_message = message.strip()
 
         intent_result = self.intent_classifier.classify(normalized_message)
+        goal_result = None
 
         if intent_result.intent == IntentType.CONVERSATION:
             response = (
                 "Conversazione riconosciuta. "
                 "Il modulo di dialogo non è ancora disponibile."
             )
-            goal_result = None
 
         elif intent_result.intent == IntentType.QUESTION:
             response = (
                 "Domanda riconosciuta. "
                 "Il modulo di risposta non è ancora disponibile."
             )
-            goal_result = None
 
         elif intent_result.intent == IntentType.GOAL:
             goal_result = self.process_goal(normalized_message)
@@ -73,14 +72,29 @@ class DigitalBrain:
                 "Istruzione riconosciuta. "
                 "Il modulo di esecuzione non è ancora disponibile."
             )
-            goal_result = None
 
         else:
             response = (
                 "Non sono riuscito a identificare la tua intenzione. "
                 "Puoi spiegarmi meglio cosa desideri?"
             )
-            goal_result = None
+
+        if self._memory is not None and normalized_message:
+            self._memory.add_record(
+                normalized_message,
+                memory_type=MemoryType.EPISODIC,
+                source="core.process_message",
+                confidence=float(intent_result.confidence),
+                metadata={
+                    "intent": intent_result.intent.value,
+                    "needs_clarification": intent_result.needs_clarification,
+                    "explanation": intent_result.explanation,
+                    "response": response,
+                    "goal_memory_record_id": (
+                        goal_result.memory_record_id if goal_result else None
+                    ),
+                },
+            )
 
         return MessageResult(
             message=normalized_message,
