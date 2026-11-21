@@ -23,7 +23,7 @@ This roadmap turns the [founding vision](VISION.md) into incremental, verifiable
 - [x] Structured knowledge records/facts with provenance
 - [x] Knowledge persistence/query/correction with tests
 - [x] CLI knowledge commands (add/list/search/stats)
-- [ ] Context assembly from memory and knowledge
+- [x] Context assembly baseline from memory and knowledge
 - [ ] Confidence/conflict handling in Core context use
 
 ## M3 — Reasoning and planning

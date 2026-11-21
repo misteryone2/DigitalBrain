@@ -19,7 +19,8 @@ The project is developed incrementally. The first milestone is a small, testable
 - [x] Memory hardening (search/stats/get/correct CLI, source filter, schema versioning)
 - [x] Knowledge store baseline (SQLite facts: subject/predicate/object, provenance, confidence, correction/supersession)
 - [x] CLI knowledge commands (add/list/search/stats)
-- [ ] Knowledge integration into Core context/planning
+- [x] Deterministic context assembly baseline (memory + knowledge snapshot in goal processing)
+- [ ] Knowledge/context use in planning decisions (still deterministic, testable)
 - [ ] Clear Core contracts/protocols and module boundaries
 
 ## Requirements
