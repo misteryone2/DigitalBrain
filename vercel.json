@@ -1,9 +1,0 @@
-{
-  "installCommand": "npm install --prefix interface",
-  "buildCommand": "npm run build --prefix interface",
-  "outputDirectory": "interface/dist",
-  "framework": "vite",
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
-}
