@@ -47,9 +47,10 @@ This roadmap turns the [founding vision](VISION.md) into incremental, verifiable
 - [x] Explicit approval model for mutating execution (`plan.execution_approved`, metadata; no auto-execution)
 - [x] Scoped approval metadata (optional tool/risk class) and policy enforcement
 - [x] Single-use approval reserve/finalize lifecycle for mutating execution
+- [x] Approval expiration (`expires_at`) enforced in policy/store reserve path
 - [x] Admin approval recovery: explicit list/resolve reserved approvals (audited, no auto-recovery)
 - [x] Controlled mutating low-risk tools: `write_file`, `mkdir` (policy-gated, CLI opt-in + approval + ready gate required)
-- [x] Sandbox hardening baseline: subprocess worker for default tools, timeout, best-effort process-tree kill, arg/output limits, symlink-path rejection, risk-class enforcement
+- [x] Sandbox hardening baseline: subprocess worker for default tools, timeout, best-effort process-tree kill, arg/output limits, per-tool output caps, symlink-path rejection, risk-class enforcement
 - [x] Audit logs for tool actions/decisions (`tool.requested/allowed/denied/executed/failed`) and approval lifecycle events
 - [x] CLI tool inspection/execution commands (`--list-tools`, `--run-tool`, `--approve-plan-execution`, `--allow-mutating-tools`, `--list-approvals`, `--resolve-approval`)
 - [ ] OS/process-level sandbox isolation and resource quotas (Job Objects/cgroups/container-grade)
