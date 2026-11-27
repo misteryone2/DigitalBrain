@@ -2,6 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from digitalbrain.core.audit import AuditLog
 from digitalbrain.execution import ExecutionPolicy, ToolExecutor
@@ -247,6 +248,40 @@ class TestExecution(unittest.TestCase):
             res = ex.execute("slow", {})
             self.assertFalse(res.ok)
             self.assertIn("timed out", (res.error or "").lower())
+
+    def test_container_mode_builds_docker_command(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "a.txt").write_text("ok", encoding="utf-8")
+            ex = ToolExecutor(workspace_root=root, sandbox_mode="container")
+            fake_proc = mock.Mock()
+            fake_proc.returncode = 0
+            fake_proc.communicate.return_value = None
+
+            def fake_popen(cmd, **kwargs):
+                # simulate worker writing stdout file
+                stdout_f = kwargs["stdout"]
+                stdout_f.write(b'{"ok": true, "output": {"content":"ok"}}')
+                stdout_f.flush()
+                return fake_proc
+
+            with mock.patch("digitalbrain.execution.executor.shutil.which", return_value="/usr/bin/docker"), \
+                 mock.patch("digitalbrain.execution.executor.subprocess.run", return_value=mock.Mock(returncode=0)), \
+                 mock.patch("digitalbrain.execution.executor.subprocess.Popen", side_effect=fake_popen) as popen:
+                res = ex.execute("read_file", {"path": "a.txt"})
+            self.assertTrue(res.ok)
+            cmd = popen.call_args.args[0]
+            self.assertIn("--network", cmd)
+            self.assertIn("none", cmd)
+            self.assertIn("--read-only", cmd)
+
+    def test_container_mode_unavailable_fails_cleanly(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            ex = ToolExecutor(workspace_root=tmp, sandbox_mode="container")
+            with mock.patch("digitalbrain.execution.executor.shutil.which", return_value=None):
+                res = ex.execute("list_dir", {"path": "."})
+            self.assertFalse(res.ok)
+            self.assertIn("docker", (res.error or "").lower())
 
 
 if __name__ == "__main__":
