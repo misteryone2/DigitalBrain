@@ -12,7 +12,7 @@ class ApiTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db = Path(tmp)/'m.db'
             with SQLiteMemoryStore(db) as ms:
-                ms.add_record(content='hi', memory_type=MemoryType.EVENT, source='test')
+                ms.add_record(content='hi', memory_type=MemoryType.EPISODIC, source='test')
             old=os.environ.copy()
             try:
                 os.environ['DIGITALBRAIN_API_TOKEN']='tok'
