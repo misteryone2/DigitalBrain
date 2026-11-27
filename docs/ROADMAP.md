@@ -51,9 +51,10 @@ This roadmap turns the [founding vision](VISION.md) into incremental, verifiable
 - [x] Admin approval recovery: explicit list/resolve reserved approvals (audited, no auto-recovery)
 - [x] Controlled mutating low-risk tools: `write_file`, `mkdir` (policy-gated, CLI opt-in + approval + ready gate required)
 - [x] Sandbox hardening baseline: subprocess worker for default tools, timeout, best-effort process-tree kill, arg/output limits, per-tool output caps, symlink-path rejection, risk-class enforcement
+- [x] Optional Docker container sandbox mode (`--sandbox-mode host|container|auto`) with network-off/read-only/caps/resource flags
 - [x] Audit logs for tool actions/decisions (`tool.requested/allowed/denied/executed/failed`) and approval lifecycle events
-- [x] CLI tool inspection/execution commands (`--list-tools`, `--run-tool`, `--approve-plan-execution`, `--allow-mutating-tools`, `--list-approvals`, `--resolve-approval`)
-- [ ] OS/process-level sandbox isolation and resource quotas (Job Objects/cgroups/container-grade)
+- [x] CLI tool inspection/execution commands (`--list-tools`, `--run-tool`, `--approve-plan-execution`, `--allow-mutating-tools`, `--list-approvals`, `--resolve-approval`, `--sandbox-mode`)
+- [ ] Hardened container-grade isolation by default across environments (policy-enforced runtime, image pinning/provenance, seccomp/apparmor profiles, audited quotas)
 - [ ] Broader mutating tool set with per-tool risk classes and human approval workflow
 
 ## M5 — Learning and metacognition
