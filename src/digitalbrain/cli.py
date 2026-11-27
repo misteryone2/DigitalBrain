@@ -1,4 +1,4 @@
-"""Command-line interface for the DigitalBrain prototype."""
+﻿"""Command-line interface for the DigitalBrain prototype."""
 
 from __future__ import annotations
 
@@ -248,6 +248,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--record-outcome", nargs=3, metavar=("KIND", "REF_ID", "STATUS"), help="Record an outcome in --outcomes-db.")
     parser.add_argument("--outcomes-summary", action="store_true", help="Show outcome summary from --outcomes-db.")
     parser.add_argument("--outcomes-regressions", action="store_true", help="Detect deterministic outcome regressions from --outcomes-db.")
+    parser.add_argument("--compare-outcomes", nargs=3, metavar=("KIND", "BASELINE_REF", "CANDIDATE_REF"), help="Deterministic baseline vs candidate outcome comparison.")
     parser.add_argument("--promotion-db", help="SQLite file for environment promotion records (M6 baseline).")
     parser.add_argument("--record-promotion", nargs=5, metavar=("ARTIFACT", "FROM", "TO", "STATUS", "REASON"), help="Record promotion/rollback event.")
     parser.add_argument("--list-promotions", action="store_true", help="List promotion records from --promotion-db.")
@@ -342,7 +343,7 @@ def main(argv: list[str] | None = None) -> int:
     plan_actions = [args.list_plans, bool(args.get_plan and not args.list_approvals), bool(args.replan), bool(args.set_plan_lifecycle), bool(args.record_step_outcome), bool(args.approve_plan_execution), args.list_approvals, bool(args.resolve_approval)]
     audit_actions = [args.list_audit]
     execution_actions = [args.list_tools, bool(args.run_tool)]
-    outcome_actions = [bool(args.record_outcome), bool(args.outcomes_summary), bool(args.outcomes_regressions)]
+    outcome_actions = [bool(args.record_outcome), bool(args.outcomes_summary), bool(args.outcomes_regressions), bool(args.compare_outcomes)]
     promotion_actions = [bool(args.record_promotion), bool(args.list_promotions)]
     api_actions = [bool(args.serve_api)]
     groups = [any(memory_actions), any(knowledge_actions), any(plan_actions), any(audit_actions), any(execution_actions), any(outcome_actions), any(promotion_actions), any(api_actions)]
@@ -357,7 +358,7 @@ def main(argv: list[str] | None = None) -> int:
     if sum(1 for a in execution_actions if a) > 1:
         parser.error("Use only one of --list-tools or --run-tool")
     if sum(1 for a in outcome_actions if a) > 1:
-        parser.error("Use only one of --record-outcome, --outcomes-summary, or --outcomes-regressions")
+        parser.error("Use only one outcome action: --record-outcome, --outcomes-summary, --outcomes-regressions, or --compare-outcomes")
     if sum(1 for a in promotion_actions if a) > 1:
         parser.error("Use only one of --record-promotion or --list-promotions")
     if args.run_tool and args.tool_plan_id and not args.plan_db:
@@ -395,6 +396,17 @@ def main(argv: list[str] | None = None) -> int:
         from digitalbrain.learning import SQLiteOutcomeStore
         with SQLiteOutcomeStore(args.outcomes_db) as store:
             report = store.detect_regressions()
+        for k, v in report.items():
+            print(f"{k}: {v}")
+        return 0
+
+    if args.compare_outcomes:
+        if not args.outcomes_db:
+            parser.error("--compare-outcomes requires --outcomes-db")
+        kind, base_ref, cand_ref = args.compare_outcomes
+        from digitalbrain.learning import SQLiteOutcomeStore
+        with SQLiteOutcomeStore(args.outcomes_db) as store:
+            report = store.compare_baseline_candidate(kind=kind, baseline_ref=base_ref, candidate_ref=cand_ref)
         for k, v in report.items():
             print(f"{k}: {v}")
         return 0

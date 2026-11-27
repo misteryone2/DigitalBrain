@@ -12,6 +12,7 @@ class PromotionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db = Path(tmp) / "p.db"
             with SQLitePromotionStore(db) as store:
+                store.record(artifact="plan:1", from_env="lab", to_env="validation", status="proposed", reason="candidate")
                 rec = store.record(artifact="plan:1", from_env="lab", to_env="validation", status="approved", reason="tests passed")
                 self.assertEqual(rec.to_env, "validation")
                 recs = store.list()

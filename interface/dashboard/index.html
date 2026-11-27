@@ -1,0 +1,45 @@
+﻿<!doctype html>
+<html lang="en">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DigitalBrain Dashboard</title>
+<style>
+body{font-family:system-ui,Arial,sans-serif;margin:24px;background:#111;color:#eee}
+input,button{padding:8px;margin:4px 0} .row{display:flex;gap:8px;flex-wrap:wrap}
+pre{background:#1c1c1c;padding:12px;overflow:auto;max-height:280px}
+.card{border:1px solid #333;padding:12px;margin:12px 0;border-radius:8px}
+small{color:#aaa}
+</style>
+<h1>DigitalBrain Read-Only Dashboard</h1>
+<p><small>Consumes only /v1/* real API data. No mutations.</small></p>
+<div class="row">
+  <label>API base <input id="base" value="http://127.0.0.1:8765" size="32"></label>
+  <label>Bearer token <input id="token" size="32" type="password"></label>
+  <button id="load">Load</button>
+</div>
+<div id="status" class="card">Idle</div>
+<div class="card"><h3>Health</h3><pre id="health"></pre></div>
+<div class="card"><h3>Plans</h3><pre id="plans"></pre></div>
+<div class="card"><h3>Outcomes</h3><pre id="outcomes"></pre></div>
+<div class="card"><h3>Promotions</h3><pre id="promotions"></pre></div>
+<script>
+async function get(path){
+  const base=document.getElementById('base').value.replace(/\/$/,'');
+  const token=document.getElementById('token').value;
+  const r=await fetch(base+path,{headers:{'Authorization':'Bearer '+token}});
+  const t=await r.text();
+  if(!r.ok) throw new Error(path+' '+r.status+' '+t);
+  return JSON.parse(t);
+}
+document.getElementById('load').onclick=async()=>{
+  const status=document.getElementById('status');
+  status.textContent='Loading...';
+  try{
+    for(const [id,path] of [['health','/v1/health'],['plans','/v1/plans?limit=10'],['outcomes','/v1/outcomes?limit=10'],['promotions','/v1/promotions?limit=10']]){
+      try{ document.getElementById(id).textContent=JSON.stringify(await get(path),null,2); }
+      catch(e){ document.getElementById(id).textContent=String(e); }
+    }
+    status.textContent='Loaded (errors shown per card if endpoint not configured/authorized).';
+  }catch(e){ status.textContent=String(e); }
+};
+</script>
+</html>

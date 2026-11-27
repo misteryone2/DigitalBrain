@@ -109,6 +109,13 @@ class SQLiteOutcomeStore:
         rate = (success / total) if total else None
         return {"total": total, "by_status": by_status, "success_rate": rate, "failures": failure}
 
+    @staticmethod
+    def _success_rate(items: list[OutcomeRecord]) -> float | None:
+        if not items:
+            return None
+        success = sum(1 for r in items if r.status in {"passed", "ok", "executed"})
+        return success / len(items)
+
     def detect_regressions(self, *, kind: str | None = None, window: int = 20, min_samples: int = 5, drop_threshold: float = 0.2) -> dict[str, Any]:
         """Deterministic regression signal: compare recent window vs previous window.
 
@@ -120,14 +127,8 @@ class SQLiteOutcomeStore:
         recent = rows[:window]
         previous = rows[window : window * 2]
 
-        def _rate(items: list[OutcomeRecord]) -> float | None:
-            if not items:
-                return None
-            success = sum(1 for r in items if r.status in {"passed", "ok", "executed"})
-            return success / len(items)
-
-        recent_rate = _rate(recent)
-        prev_rate = _rate(previous)
+        recent_rate = self._success_rate(recent)
+        prev_rate = self._success_rate(previous)
         enough = len(recent) >= min_samples and len(previous) >= min_samples
         drop = (prev_rate - recent_rate) if (recent_rate is not None and prev_rate is not None) else None
         regressed = bool(enough and drop is not None and drop >= drop_threshold)
@@ -143,6 +144,44 @@ class SQLiteOutcomeStore:
             "drop": drop,
             "enough_samples": enough,
             "regressed": regressed,
+        }
+
+    def compare_baseline_candidate(
+        self,
+        *,
+        kind: str,
+        baseline_ref: str,
+        candidate_ref: str,
+        min_samples: int = 1,
+    ) -> dict[str, Any]:
+        """Deterministic baseline vs candidate comparison. No automatic action."""
+        if min_samples < 1:
+            raise ValueError("min_samples must be >= 1")
+        base = self.list_outcomes(kind=kind, ref_id=baseline_ref, limit=1000)
+        cand = self.list_outcomes(kind=kind, ref_id=candidate_ref, limit=1000)
+        base_rate = self._success_rate(base)
+        cand_rate = self._success_rate(cand)
+        enough = len(base) >= min_samples and len(cand) >= min_samples
+        delta = (cand_rate - base_rate) if (base_rate is not None and cand_rate is not None) else None
+        if not enough or delta is None:
+            recommendation = "insufficient_data"
+        elif delta > 0:
+            recommendation = "candidate_better"
+        elif delta < 0:
+            recommendation = "baseline_better"
+        else:
+            recommendation = "equal"
+        return {
+            "kind": kind,
+            "baseline_ref": baseline_ref,
+            "candidate_ref": candidate_ref,
+            "baseline_count": len(base),
+            "candidate_count": len(cand),
+            "baseline_success_rate": base_rate,
+            "candidate_success_rate": cand_rate,
+            "delta": delta,
+            "enough_samples": enough,
+            "recommendation": recommendation,
         }
 
     @staticmethod

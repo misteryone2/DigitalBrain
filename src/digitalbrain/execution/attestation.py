@@ -1,7 +1,10 @@
 ﻿"""Image provenance/attestation verification helpers.
 
-Verifies local attestation JSON manifests bound to an image digest. This is a
-lightweight, verifiable control - not a full Sigstore/cosign replacement.
+Provides:
+- local HMAC-signed attestation file verification (lightweight baseline)
+- optional pluggable external verifier command hook (e.g. cosign/Sigstore wrapper)
+
+The external hook is opt-in and audited by caller; it is not a hidden trust root.
 """
 
 from __future__ import annotations
@@ -9,6 +12,9 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
+import shlex
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -23,6 +29,7 @@ class AttestationResult:
     ok: bool
     reason: str
     digest: str | None = None
+    verifier: str = "file"
 
 
 def verify_attestation_file(path: str | Path, *, image: str, secret: str | None = None) -> AttestationResult:
@@ -48,4 +55,23 @@ def verify_attestation_file(path: str | Path, *, image: str, secret: str | None 
         expected = hmac.new(secret.encode("utf-8"), canonical_json(payload).encode("utf-8"), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(expected, sig):
             return AttestationResult(False, "Attestation signature verification failed.")
-    return AttestationResult(True, "Attestation verified.", digest=digest)
+    return AttestationResult(True, "Attestation verified.", digest=digest, verifier="file")
+
+
+def verify_attestation_command(image: str, command: str, *, timeout_s: float = 20.0) -> AttestationResult:
+    """Run an external verifier command. Command may include {image} placeholder.
+
+    Exit code 0 means verified. Output is captured for audit/debug but treated as
+    untrusted text. This enables pluggable cosign/Sigstore verification without
+    bundling external dependencies.
+    """
+    cmd_str = command.format(image=image)
+    args = shlex.split(cmd_str, posix=os.name != "nt")
+    try:
+        proc = subprocess.run(args, capture_output=True, text=True, timeout=timeout_s, check=False)
+    except Exception as exc:  # noqa: BLE001
+        return AttestationResult(False, f"Attestation command failed: {exc}", verifier="command")
+    if proc.returncode == 0:
+        return AttestationResult(True, "Attestation command verified.", verifier="command")
+    detail = (proc.stderr or proc.stdout or "").strip()[:300]
+    return AttestationResult(False, f"Attestation command rejected: {detail}", verifier="command")

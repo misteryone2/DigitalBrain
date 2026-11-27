@@ -1,0 +1,53 @@
+﻿openapi: 3.0.3
+info:
+  title: DigitalBrain Read-Only API
+  version: 0.1.0
+  description: Authenticated read-only API exposing real configured stores. No mutation endpoints.
+servers:
+  - url: http://127.0.0.1:8765
+security:
+  - bearerAuth: []
+paths:
+  /v1/health:
+    get:
+      summary: Health
+      responses:
+        '200': { description: OK }
+  /v1/plans:
+    get:
+      summary: List plans
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+      responses:
+        '200': { description: OK }
+  /v1/memory:
+    get:
+      summary: List memory records
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+      responses:
+        '200': { description: OK }
+  /v1/audit:
+    get:
+      summary: List audit events
+      responses:
+        '200': { description: OK }
+  /v1/outcomes:
+    get:
+      summary: List outcomes, summary, regression signal
+      responses:
+        '200': { description: OK }
+  /v1/promotions:
+    get:
+      summary: List promotion/rollback records
+      responses:
+        '200': { description: OK }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer

@@ -78,11 +78,19 @@ class SQLitePromotionStore:
         allowed_status = {"proposed", "approved", "rejected", "promoted", "rolled_back", "failed"}
         if rec.status not in allowed_status:
             raise ValueError(f"status must be one of {sorted(allowed_status)}")
-        # Simple guardrail: promotion to production requires explicit approval record in metadata.
-        if rec.to_env == "production" and rec.status == "promoted":
-            approved = bool((rec.metadata or {}).get("human_approval", False))
-            if not approved:
-                raise ValueError("Promotion to production requires metadata.human_approval=true (no autonomous promotion).")
+
+        # Deterministic workflow guardrails. No autonomous deployment.
+        history = [r for r in self.list(limit=1000) if r.artifact == rec.artifact and r.from_env == rec.from_env and r.to_env == rec.to_env]
+        statuses = {r.status for r in history}
+        if rec.status == "approved" and "proposed" not in statuses:
+            raise ValueError("Promotion must be proposed before approval.")
+        if rec.status == "promoted":
+            if "approved" not in statuses and not bool((rec.metadata or {}).get("human_approval", False)):
+                raise ValueError("Promotion requires prior approved record or explicit human_approval metadata.")
+        if rec.to_env == "production" and rec.status in {"approved", "promoted"}:
+            if not bool((rec.metadata or {}).get("human_approval", False)):
+                raise ValueError("Production promotion requires metadata.human_approval=true (no autonomous promotion).")
+
         with self._conn:
             self._conn.execute(
                 "INSERT INTO promotions(id,created_at,artifact,from_env,to_env,status,reason,metadata_json) VALUES (?,?,?,?,?,?,?,?)",

@@ -48,6 +48,7 @@ class SandboxPolicyConfig:
     require_image_digest: bool = False
     require_attestation: bool = False
     attestation_path: str | None = None
+    attestation_command: str | None = None
     container_seccomp: str | None = None
     container_apparmor: str | None = None
     require_seccomp: bool = False
@@ -82,21 +83,24 @@ class SandboxPolicyConfig:
     def from_env(cls) -> "SandboxPolicyConfig":
         allow = os.environ.get("DIGITALBRAIN_ALLOWED_IMAGE_DIGESTS", "")
         allowed = tuple(x.strip() for x in allow.split(",") if x.strip())
+        profile = os.environ.get("DIGITALBRAIN_SANDBOX_PROFILE", "").strip().lower()
+        hardened = profile == "hardened"
         return cls(
-            mode=os.environ.get("DIGITALBRAIN_SANDBOX_MODE", "host"),
+            mode=os.environ.get("DIGITALBRAIN_SANDBOX_MODE", "required" if hardened else "host"),
             container_image=os.environ.get("DIGITALBRAIN_CONTAINER_IMAGE", "python:3.12-slim"),
             allowed_image_digests=allowed,
-            require_image_digest=_env_bool("DIGITALBRAIN_REQUIRE_IMAGE_DIGEST", False),
+            require_image_digest=_env_bool("DIGITALBRAIN_REQUIRE_IMAGE_DIGEST", hardened),
             require_attestation=_env_bool("DIGITALBRAIN_REQUIRE_ATTESTATION", False),
             attestation_path=os.environ.get("DIGITALBRAIN_ATTESTATION_PATH"),
+            attestation_command=os.environ.get("DIGITALBRAIN_ATTESTATION_COMMAND"),
             container_seccomp=os.environ.get("DIGITALBRAIN_CONTAINER_SECCOMP"),
             container_apparmor=os.environ.get("DIGITALBRAIN_CONTAINER_APPARMOR"),
-            require_seccomp=_env_bool("DIGITALBRAIN_REQUIRE_SECCOMP", False),
-            require_apparmor=_env_bool("DIGITALBRAIN_REQUIRE_APPARMOR", False),
+            require_seccomp=_env_bool("DIGITALBRAIN_REQUIRE_SECCOMP", hardened),
+            require_apparmor=_env_bool("DIGITALBRAIN_REQUIRE_APPARMOR", hardened),
             host_job_limits=_env_bool("DIGITALBRAIN_HOST_JOB_LIMITS", True),
             require_container_for_mutating=_env_bool("DIGITALBRAIN_REQUIRE_CONTAINER_FOR_MUTATING", True),
-            enforce_central_policy=_env_bool("DIGITALBRAIN_SANDBOX_POLICY_REQUIRED", False),
-            policy_source="env/defaults",
+            enforce_central_policy=_env_bool("DIGITALBRAIN_SANDBOX_POLICY_REQUIRED", hardened),
+            policy_source=f"env/profile:{profile}" if profile else "env/defaults",
         )
 
     @classmethod
@@ -115,6 +119,7 @@ class SandboxPolicyConfig:
             require_image_digest=bool(data.get("require_image_digest", False)),
             require_attestation=bool(data.get("require_attestation", False)),
             attestation_path=data.get("attestation_path"),
+            attestation_command=data.get("attestation_command"),
             container_seccomp=data.get("container_seccomp"),
             container_apparmor=data.get("container_apparmor"),
             require_seccomp=bool(data.get("require_seccomp", False)),
@@ -133,6 +138,7 @@ class SandboxPolicyConfig:
             "require_image_digest": self.require_image_digest,
             "require_attestation": self.require_attestation,
             "attestation_path": self.attestation_path,
+            "attestation_command": self.attestation_command,
             "container_seccomp": self.container_seccomp,
             "container_apparmor": self.container_apparmor,
             "require_seccomp": self.require_seccomp,

@@ -18,7 +18,7 @@ from digitalbrain.core.audit import AuditLog
 from digitalbrain.execution import winjob
 from digitalbrain.execution.policy import ExecutionPolicy
 from digitalbrain.execution.sandbox_policy import SandboxPolicyConfig
-from digitalbrain.execution.attestation import verify_attestation_file
+from digitalbrain.execution.attestation import verify_attestation_command, verify_attestation_file
 from digitalbrain.execution.tools import ToolSpec, default_tools
 
 
@@ -445,12 +445,20 @@ class ToolExecutor:
         if self.sandbox_policy.require_apparmor and not self.container_apparmor:
             raise ValueError("AppArmor profile required by sandbox policy.")
         if self.sandbox_policy.require_attestation:
-            if not self.sandbox_policy.attestation_path:
-                raise ValueError("Attestation required by sandbox policy but no attestation_path configured.")
-            secret = os.environ.get("DIGITALBRAIN_ATTESTATION_SECRET")
-            att = verify_attestation_file(self.sandbox_policy.attestation_path, image=img, secret=secret)
-            if not att.ok:
-                raise ValueError(f"Image attestation failed: {att.reason}")
+            # Prefer external pluggable verifier (e.g. cosign wrapper) when configured.
+            if self.sandbox_policy.attestation_command:
+                att = verify_attestation_command(img, self.sandbox_policy.attestation_command)
+                self._audit("tool.attestation", "ok" if att.ok else "denied", {"image": img, "verifier": att.verifier, "reason": att.reason})
+                if not att.ok:
+                    raise ValueError(f"Image attestation failed: {att.reason}")
+            elif self.sandbox_policy.attestation_path:
+                secret = os.environ.get("DIGITALBRAIN_ATTESTATION_SECRET")
+                att = verify_attestation_file(self.sandbox_policy.attestation_path, image=img, secret=secret)
+                self._audit("tool.attestation", "ok" if att.ok else "denied", {"image": img, "verifier": att.verifier, "reason": att.reason})
+                if not att.ok:
+                    raise ValueError(f"Image attestation failed: {att.reason}")
+            else:
+                raise ValueError("Attestation required by sandbox policy but no attestation_path or attestation_command configured.")
 
     @staticmethod
     def _parse_worker_output(spec: ToolSpec, stdout_bytes: bytes, stderr_bytes: bytes, returncode: int, max_output_bytes: int) -> dict[str, Any]:
