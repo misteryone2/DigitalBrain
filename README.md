@@ -34,6 +34,9 @@ The project is developed incrementally. The first milestone is a small, testable
 - [x] M4 hardening baseline: mutating tools disabled by default; explicit approval + ready gate required for mutating execution; `write_file` exists but is policy-gated (no auto-execution)
 - [x] M4 sandbox hardening: isolated worker default tools, per-tool timeout, bounded args/outputs, output caps, symlink-path rejection, risk-class metadata, scoped approvals, risk-class enforcement, single-use reserve/finalize approval lifecycle, approval expiration, Docker container mode (`host/container/auto/required`); **mutating tools require container sandbox**; optional digest/seccomp/apparmor/env policy + sandbox manifest audit
 - [x] M3 measurable deterministic benchmarks: planning structure, failure->replan proposal, explicit replanning versioning
+- [x] M5 baseline: outcome recording, deterministic metrics summary, capability/error report (no autonomous self-modification)
+- [x] M6 baseline: lab/validation/production promotion/rollback records (no autonomous deployment)
+- [x] M7 baseline: authenticated read-only API exposing real configured stores (no mutation endpoints)
 - [x] Approval expiration (`expires_at`) and admin recovery: list/resolve reserved approvals (audited, no auto-recovery)
 - [x] Controlled low-risk mutating tools: `write_file`, `mkdir` (policy-gated, approval+ready+opt-in required)
 

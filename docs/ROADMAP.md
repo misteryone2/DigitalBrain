@@ -53,26 +53,27 @@ This roadmap turns the [founding vision](VISION.md) into incremental, verifiable
 - [x] Sandbox hardening baseline: subprocess worker for default tools, timeout, best-effort process-tree kill, arg/output limits, per-tool output caps, symlink-path rejection, risk-class enforcement
 - [x] Docker container sandbox mode (`host|container|auto|required`) with network-off/read-only/cpu/memory/pids/cap-drop/no-new-privileges/tmpfs
 - [x] Policy: mutating tools denied unless sandbox resolves to container
-- [x] Hardening options: digest requirement, optional seccomp/apparmor, env-configurable policy, Windows host Job Object limits (best-effort), container manifest audit (`tool.sandbox_manifest`)
+- [x] Hardening options: digest requirement/allowlist, optional/required seccomp/apparmor, env+signed policy file, attestation file verification, Windows host Job Object limits (best-effort), container manifest audit (`tool.sandbox_manifest`)
 - [x] Audit logs for tool actions/decisions (`tool.requested/allowed/denied/executed/failed`) and approval lifecycle events
-- [x] CLI tool inspection/execution commands (`--list-tools`, `--run-tool`, `--approve-plan-execution`, `--allow-mutating-tools`, `--list-approvals`, `--resolve-approval`, sandbox options)
-- [ ] Hardened container-grade isolation by default across environments (signed image provenance/attestation, mandatory seccomp/apparmor, centralized signed policy, non-Docker/containerd parity)
+- [x] CLI tool inspection/execution commands (`--list-tools`, `--run-tool`, `--approve-plan-execution`, `--allow-mutating-tools`, `--list-approvals`, `--resolve-approval`, sandbox/policy options)
+- [ ] Hardened container-grade isolation by default across environments (full Sigstore/cosign provenance, mandatory profiles everywhere, centralized signed/PKI policy distribution, non-Docker/containerd parity)
 - [ ] Broader mutating tool set with per-tool risk classes and human approval workflow
 
 ## M5 — Learning and metacognition
-- [ ] Outcome recording and evaluation
-- [ ] Strategy/behavior updates based on evidence
-- [ ] Capability and error tracking
-- [ ] Performance metrics and regression detection
+- [x] Outcome recording and evaluation (`SQLiteOutcomeStore`, CLI record/summary)
+- [x] Capability and error tracking baseline (`learning.metacognition.capability_report`)
+- [x] Performance metrics summary (deterministic, from recorded outcomes)
+- [ ] Strategy/behavior updates based on evidence (no auto-modification of code/prompt/policy without audit/approval)
+- [ ] Regression detection across baselines/candidates
 
 ## M6 — Controlled evolution
-- [ ] Laboratory/validation/production environment separation
-- [ ] Isolated candidate workspaces
-- [ ] Baseline benchmarks, candidate comparison, rollback
-- [ ] Human approval for promotion and high-impact changes
+- [x] Environment promotion/rollback records (`lab/validation/production`, SQLite promotion store, CLI)
+- [ ] Isolated candidate workspaces and execution isolation for experiments
+- [ ] Baseline benchmarks, candidate comparison, automated rollback triggers
+- [ ] Human approval for promotion and high-impact changes (policy-enforced)
 
 ## M7 — Interfaces and observability
-- [ ] Authenticated API
+- [x] Authenticated read-only API baseline (`digitalbrain.api.server`, token env, no mutation endpoints)
 - [ ] Dashboard reflecting real system state
 - [ ] 3D architecture visualization backed by live data
 - [ ] Desktop/mobile client access
