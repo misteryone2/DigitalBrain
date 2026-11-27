@@ -561,8 +561,11 @@ def main(argv: list[str] | None = None) -> int:
             # Build executor with explicit mutating opt-in; default remains read-only only.
             from digitalbrain.execution import default_tools
             all_tools = default_tools(Path(args.workspace).resolve())
-            allowed = {n for n, t in all_tools.items() if t.read_only or args.allow_mutating_tools}
-            policy = ExecutionPolicy(allowed_tools=allowed, allow_read_only=True, allow_mutating=bool(args.allow_mutating_tools))
+            policy = ExecutionPolicy(
+                allowed_tools=set(all_tools.keys()),
+                allow_read_only=True,
+                allow_mutating=bool(args.allow_mutating_tools),
+            )
             executor = ToolExecutor(workspace_root=args.workspace, policy=policy, audit_log=audit, tools=all_tools)
 
             result = executor.execute(args.run_tool, tool_args, execution_gate=gate, approval=approval)
