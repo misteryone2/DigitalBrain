@@ -1,7 +1,8 @@
-"""Read-only tool definitions for DigitalBrain execution layer.
+"""Tool definitions for DigitalBrain execution layer.
 
-M4 baseline: only safe, inspectable, read-only tools. No shell, no write, no
-network. All paths are constrained to an allowed workspace root.
+M4 baseline: safe, inspectable, read-only tools by default. No shell, no network.
+All paths are constrained to an allowed workspace root. Mutating tools may exist
+in registry but must be blocked by policy unless explicitly enabled and approved.
 """
 
 from __future__ import annotations
@@ -93,7 +94,19 @@ def tool_grep(root: Path, *, pattern: str, path: str = ".", limit: int = 100) ->
     return {"pattern": pattern, "matches": matches, "count": len(matches)}
 
 
-def default_readonly_tools(root: Path) -> dict[str, ToolSpec]:
+def tool_write_file(root: Path, *, path: str, content: str, overwrite: bool = False) -> dict[str, Any]:
+    """Mutating tool: disabled by default policy. Requires explicit approval + ready gate."""
+    if not isinstance(content, str):
+        raise ValueError("content must be a string.")
+    target = _resolve_safe_path(root, path)
+    if target.exists() and not overwrite:
+        raise ValueError("File exists and overwrite is false.")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(content, encoding="utf-8")
+    return {"path": str(target), "chars": len(content), "overwritten": target.exists()}
+
+
+def default_tools(root: Path) -> dict[str, ToolSpec]:
     return {
         "list_dir": ToolSpec(
             name="list_dir",
@@ -113,4 +126,15 @@ def default_readonly_tools(root: Path) -> dict[str, ToolSpec]:
             read_only=True,
             handler=lambda **kw: tool_grep(root, **kw),
         ),
+        "write_file": ToolSpec(
+            name="write_file",
+            description="Write a UTF-8 text file within workspace. Mutating; disabled by default policy.",
+            read_only=False,
+            handler=lambda **kw: tool_write_file(root, **kw),
+        ),
     }
+
+
+def default_readonly_tools(root: Path) -> dict[str, ToolSpec]:
+    # Backward-compatible name; includes mutating tools marked read_only=False.
+    return default_tools(root)

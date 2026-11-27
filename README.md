@@ -31,6 +31,7 @@ The project is developed incrementally. The first milestone is a small, testable
 - [x] Explicit step outcome recording (passed/failed/skipped) with plan metadata update
 - [x] Deterministic failure gate and explicit replan proposals for critical/blocked failed steps (no auto-replan)
 - [x] M4 baseline: read-only tool registry (`list_dir`, `read_file`, `grep`) with workspace boundary, allowlist policy, execution gate awareness, and audit events
+- [x] M4 hardening baseline: mutating tools disabled by default; explicit approval + ready gate required for mutating execution; `write_file` exists but is policy-gated (no auto-execution)
 
 ## Requirements
 

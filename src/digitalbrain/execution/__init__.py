@@ -2,7 +2,7 @@
 
 from .executor import ToolExecutionResult, ToolExecutor
 from .policy import ExecutionPolicy, PolicyDecision
-from .tools import ToolSpec, default_readonly_tools
+from .tools import ToolSpec, default_readonly_tools, default_tools
 
 __all__ = [
     "ExecutionPolicy",
@@ -11,4 +11,5 @@ __all__ = [
     "ToolExecutor",
     "ToolSpec",
     "default_readonly_tools",
+    "default_tools",
 ]

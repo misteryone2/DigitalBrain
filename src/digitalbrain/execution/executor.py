@@ -8,7 +8,7 @@ from typing import Any
 
 from digitalbrain.core.audit import AuditLog
 from digitalbrain.execution.policy import ExecutionPolicy
-from digitalbrain.execution.tools import ToolSpec, default_readonly_tools
+from digitalbrain.execution.tools import ToolSpec, default_tools
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,8 +43,8 @@ class ToolExecutor:
         tools: dict[str, ToolSpec] | None = None,
     ) -> None:
         self.workspace_root = Path(workspace_root).resolve()
-        self.tools = tools or default_readonly_tools(self.workspace_root)
-        self.policy = policy or ExecutionPolicy(allowed_tools=set(self.tools.keys()))
+        self.tools = tools or default_tools(self.workspace_root)
+        self.policy = policy or ExecutionPolicy(allowed_tools={n for n, t in self.tools.items() if t.read_only})
         self.audit = audit_log
 
     def list_tools(self) -> list[dict[str, Any]]:
@@ -53,15 +53,36 @@ class ToolExecutor:
             for t in self.tools.values()
         ]
 
-    def execute(self, tool_name: str, arguments: dict[str, Any] | None = None, *, execution_gate: dict[str, Any] | None = None) -> ToolExecutionResult:
+    def execute(
+        self,
+        tool_name: str,
+        arguments: dict[str, Any] | None = None,
+        *,
+        execution_gate: dict[str, Any] | None = None,
+        approval: dict[str, Any] | None = None,
+    ) -> ToolExecutionResult:
         args = dict(arguments or {})
         spec = self.tools.get(tool_name)
-        self._audit("tool.requested", "requested", {"tool": tool_name, "arguments": args})
+        self._audit(
+            "tool.requested",
+            "requested",
+            {
+                "tool": tool_name,
+                "arguments": args,
+                "execution_gate": execution_gate,
+                "approved": bool((approval or {}).get("approved", False)),
+            },
+        )
         if spec is None:
             self._audit("tool.denied", "denied", {"tool": tool_name, "reason": "unknown tool"})
             return ToolExecutionResult(tool_name, False, False, None, "Unknown tool.", "Unknown tool.")
 
-        decision = self.policy.evaluate(tool_name, read_only=spec.read_only, execution_gate=execution_gate)
+        decision = self.policy.evaluate(
+            tool_name,
+            read_only=spec.read_only,
+            execution_gate=execution_gate,
+            approval=approval,
+        )
         if not decision.allowed:
             self._audit("tool.denied", "denied", {"tool": tool_name, "reason": decision.reason, "arguments": args})
             return ToolExecutionResult(tool_name, False, False, None, decision.reason, decision.reason)

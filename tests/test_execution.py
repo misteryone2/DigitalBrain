@@ -75,6 +75,49 @@ class TestExecution(unittest.TestCase):
             self.assertTrue(res.ok)
             self.assertIn("needs review", res.policy_reason.lower())
 
+    def test_mutating_tool_denied_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            ex = ToolExecutor(workspace_root=tmp)
+            res = ex.execute("write_file", {"path": "x.txt", "content": "hi"})
+            self.assertFalse(res.ok)
+            self.assertFalse(res.allowed)
+            self.assertIn("mutating", res.policy_reason.lower())
+
+    def test_mutating_tool_requires_ready_gate_and_approval(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            from digitalbrain.execution import default_tools
+            all_tools = default_tools(root)
+            policy = ExecutionPolicy(allowed_tools=set(all_tools.keys()), allow_mutating=True)
+            ex = ToolExecutor(workspace_root=root, policy=policy, tools=all_tools)
+
+            denied_gate = ex.execute(
+                "write_file",
+                {"path": "x.txt", "content": "hi", "overwrite": True},
+                execution_gate={"status": "needs_review"},
+                approval={"approved": True},
+            )
+            self.assertFalse(denied_gate.ok)
+            self.assertIn("gate", denied_gate.policy_reason.lower())
+
+            denied_approval = ex.execute(
+                "write_file",
+                {"path": "x.txt", "content": "hi", "overwrite": True},
+                execution_gate={"status": "ready"},
+                approval={"approved": False},
+            )
+            self.assertFalse(denied_approval.ok)
+            self.assertIn("approval", denied_approval.policy_reason.lower())
+
+            ok = ex.execute(
+                "write_file",
+                {"path": "x.txt", "content": "hi", "overwrite": True},
+                execution_gate={"status": "ready"},
+                approval={"approved": True},
+            )
+            self.assertTrue(ok.ok)
+            self.assertEqual((root / "x.txt").read_text(encoding="utf-8"), "hi")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -18,6 +18,7 @@ class PlanLifecycleStatus(StrEnum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    APPROVED_FOR_EXECUTION = "approved_for_execution"
 
 
 @dataclass(frozen=True, slots=True)

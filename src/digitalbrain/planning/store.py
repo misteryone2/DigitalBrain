@@ -224,6 +224,36 @@ class SQLitePlanStore:
             raise RuntimeError("Plan not found after update")
         return record
 
+    def approve_execution(self, plan_id: str, *, reason: str | None = None, actor: str = "cli") -> PlanRecord:
+        """Record explicit execution approval. Does not execute tools automatically."""
+        with self._connection:
+            row = self._get_row(plan_id)
+            if row is None:
+                raise ValueError(f"Unknown plan: {plan_id}")
+            record = self._row_to_record(row)
+            gate = evaluate_execution_gate(record.steps, record.warnings)
+            if gate.status != "ready":
+                raise ValueError(
+                    f"Plan {plan_id} is not ready for approval: {gate.status}; reasons={list(gate.reasons)}"
+                )
+            metadata = dict(record.metadata)
+            metadata["execution_approval"] = {
+                "approved": True,
+                "approved_at": datetime.now(timezone.utc).isoformat(),
+                "actor": actor,
+                "reason": reason,
+                "gate_status": gate.status,
+            }
+            self._connection.execute(
+                "UPDATE plan_records SET metadata_json = ? WHERE id = ?",
+                (json.dumps(metadata, sort_keys=True, ensure_ascii=False), plan_id),
+            )
+            self._set_lifecycle(plan_id, "approved_for_execution", reason=reason or "explicit approval")
+        updated = self.get(plan_id)
+        if updated is None:  # pragma: no cover
+            raise RuntimeError("Plan not found after approval")
+        return updated
+
     def record_step_outcome(
         self,
         plan_id: str,

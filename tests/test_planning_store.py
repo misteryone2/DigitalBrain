@@ -59,6 +59,30 @@ class SQLitePlanStoreTests(unittest.TestCase):
                 self.assertIn("replan_proposal", event)
                 self.assertIsNotNone(event["replan_proposal"])
 
+    def test_approve_execution_requires_ready_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "plans.db"
+            with SQLitePlanStore(db) as store:
+                blocked = store.save_plan(
+                    goal="Blocked",
+                    status="accepted_with_warnings",
+                    steps=[{"id": "step-1", "title": "Resolve", "status": "blocked"}],
+                    warnings=["conflict"],
+                    source="test",
+                )
+                with self.assertRaises(ValueError):
+                    store.approve_execution(blocked.id, reason="nope")
+
+                ready = store.save_plan(
+                    goal="Ready",
+                    status="accepted",
+                    steps=[{"id": "step-1", "title": "Do", "status": "pending"}],
+                    source="test",
+                )
+                approved = store.approve_execution(ready.id, reason="ok", actor="test")
+                self.assertEqual(approved.lifecycle_status, "approved_for_execution")
+                self.assertTrue(approved.metadata["execution_approval"]["approved"])
+
     def test_rejects_invalid_plan(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             db = Path(tmp) / "plans.db"

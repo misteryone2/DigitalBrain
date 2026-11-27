@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 
 from digitalbrain.core.audit import AuditLog
 from digitalbrain.core.brain import DigitalBrain
@@ -173,6 +174,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--tool-plan-id",
         help="Plan record id in --plan-db whose execution gate is used for --run-tool.",
     )
+    parser.add_argument(
+        "--approve-plan-execution",
+        metavar="PLAN_ID",
+        help="Explicitly approve a ready plan for future mutating execution (no auto-execution). Requires --plan-db.",
+    )
+    parser.add_argument(
+        "--allow-mutating-tools",
+        action="store_true",
+        help="Enable mutating tools in policy for this command. Mutating tools still require ready gate and explicit plan approval.",
+    )
     return parser
 
 
@@ -242,7 +253,7 @@ def main(argv: list[str] | None = None) -> int:
         bool(args.correct_memory),
     ]
     knowledge_actions = [bool(args.add_fact), args.list_facts, args.knowledge_stats]
-    plan_actions = [args.list_plans, bool(args.get_plan), bool(args.replan), bool(args.set_plan_lifecycle), bool(args.record_step_outcome)]
+    plan_actions = [args.list_plans, bool(args.get_plan), bool(args.replan), bool(args.set_plan_lifecycle), bool(args.record_step_outcome), bool(args.approve_plan_execution)]
     audit_actions = [args.list_audit]
     execution_actions = [args.list_tools, bool(args.run_tool)]
     groups = [any(memory_actions), any(knowledge_actions), any(plan_actions), any(audit_actions), any(execution_actions)]
@@ -253,11 +264,13 @@ def main(argv: list[str] | None = None) -> int:
     if sum(1 for a in knowledge_actions if a) > 1:
         parser.error("Use only one of --add-fact, --list-facts, or --knowledge-stats")
     if sum(1 for a in plan_actions if a) > 1:
-        parser.error("Use only one of --list-plans, --get-plan, --replan, --set-plan-lifecycle, or --record-step-outcome")
+        parser.error("Use only one of --list-plans, --get-plan, --replan, --set-plan-lifecycle, --record-step-outcome, or --approve-plan-execution")
     if sum(1 for a in execution_actions if a) > 1:
         parser.error("Use only one of --list-tools or --run-tool")
     if args.run_tool and args.tool_plan_id and not args.plan_db:
         parser.error("--tool-plan-id requires --plan-db")
+    if args.approve_plan_execution and not args.plan_db:
+        parser.error("--approve-plan-execution requires --plan-db")
     if sum(groups) > 1:
         parser.error("Use memory, knowledge, plan, audit, or execution commands separately")
 
@@ -333,6 +346,35 @@ def main(argv: list[str] | None = None) -> int:
             print(f"- suggested: {proposal.get('suggested_command')}")
         return 0
 
+    if args.approve_plan_execution:
+        if not args.plan_db:
+            parser.error("--approve-plan-execution requires --plan-db")
+        audit = AuditLog(args.audit_db) if args.audit_db else None
+        try:
+            with SQLitePlanStore(args.plan_db) as plans:
+                try:
+                    rec = plans.approve_execution(args.approve_plan_execution, reason=args.reason, actor="cli")
+                except ValueError as exc:
+                    print(f"Error: {exc}")
+                    return 1
+            if audit is not None:
+                audit.record(
+                    "plan.execution_approved",
+                    actor="cli",
+                    outcome="approved",
+                    details={"plan_id": rec.id, "reason": args.reason},
+                )
+        finally:
+            if audit is not None:
+                audit.close()
+        gate = rec.metadata.get("execution_gate", {}) if isinstance(rec.metadata, dict) else {}
+        approval = rec.metadata.get("execution_approval", {}) if isinstance(rec.metadata, dict) else {}
+        print(f"Plan record: {rec.id}")
+        print(f"Lifecycle: {rec.lifecycle_status}")
+        print(f"Execution gate: {gate.get('status')} executable={gate.get('executable')}")
+        print(f"Approved: {bool(approval.get('approved', False))}")
+        return 0
+
     if args.replan:
         if not args.plan_db:
             parser.error("--replan requires --plan-db")
@@ -385,8 +427,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.list_tools or args.run_tool:
         audit = AuditLog(args.audit_db) if args.audit_db else None
         try:
-            executor = ToolExecutor(workspace_root=args.workspace, audit_log=audit)
+            tools = None
             if args.list_tools:
+                executor = ToolExecutor(workspace_root=args.workspace, audit_log=audit)
                 for spec in executor.list_tools():
                     ro = "read-only" if spec["read_only"] else "mutating"
                     print(f"{spec['name']} ({ro}): {spec['description']}")
@@ -402,15 +445,25 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
 
             gate = None
+            approval = None
             if args.tool_plan_id:
                 with SQLitePlanStore(args.plan_db) as plans:
                     plan = plans.get(args.tool_plan_id)
                     if plan is None:
                         print(f"Plan record not found: {args.tool_plan_id}")
                         return 1
-                    gate = plan.metadata.get("execution_gate") if isinstance(plan.metadata, dict) else None
+                    if isinstance(plan.metadata, dict):
+                        gate = plan.metadata.get("execution_gate")
+                        approval = plan.metadata.get("execution_approval")
 
-            result = executor.execute(args.run_tool, tool_args, execution_gate=gate)
+            # Build executor with explicit mutating opt-in; default remains read-only only.
+            from digitalbrain.execution import default_tools
+            all_tools = default_tools(Path(args.workspace).resolve())
+            allowed = {n for n, t in all_tools.items() if t.read_only or args.allow_mutating_tools}
+            policy = ExecutionPolicy(allowed_tools=allowed, allow_read_only=True, allow_mutating=bool(args.allow_mutating_tools))
+            executor = ToolExecutor(workspace_root=args.workspace, policy=policy, audit_log=audit, tools=all_tools)
+
+            result = executor.execute(args.run_tool, tool_args, execution_gate=gate, approval=approval)
             print(f"Tool: {result.tool}")
             print(f"Allowed: {result.allowed}")
             print(f"OK: {result.ok}")

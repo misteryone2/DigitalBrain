@@ -1,7 +1,7 @@
 """Execution policy for DigitalBrain.
 
 Default deny. Read-only tools can be allowlisted explicitly. Mutating tools are
-blocked in M4 baseline.
+blocked unless explicitly enabled by policy and approved with a ready execution gate.
 """
 
 from __future__ import annotations
@@ -20,20 +20,49 @@ class PolicyDecision:
 
 
 class ExecutionPolicy:
-    """Simple deterministic allowlist policy."""
+    """Deterministic allowlist policy.
 
-    def __init__(self, allowed_tools: set[str] | None = None, *, allow_read_only: bool = True) -> None:
+    M4 baseline: read-only allowlisted tools only. Mutating tools remain denied by
+    default even if allowlisted, unless allow_mutating=True and an explicit approval
+    is present with a ready execution gate.
+    """
+
+    def __init__(
+        self,
+        allowed_tools: set[str] | None = None,
+        *,
+        allow_read_only: bool = True,
+        allow_mutating: bool = False,
+    ) -> None:
         self.allowed_tools = set(allowed_tools or [])
         self.allow_read_only = allow_read_only
+        self.allow_mutating = allow_mutating
 
-    def evaluate(self, tool_name: str, *, read_only: bool, execution_gate: dict[str, Any] | None = None) -> PolicyDecision:
+    def evaluate(
+        self,
+        tool_name: str,
+        *,
+        read_only: bool,
+        execution_gate: dict[str, Any] | None = None,
+        approval: dict[str, Any] | None = None,
+    ) -> PolicyDecision:
         if tool_name not in self.allowed_tools:
             return PolicyDecision(False, f"Tool '{tool_name}' is not in allowlist.")
-        if not read_only:
-            return PolicyDecision(False, f"Tool '{tool_name}' is not read-only; mutating tools are disabled.")
-        if not self.allow_read_only:
-            return PolicyDecision(False, "Read-only tools are disabled by policy.")
-        if execution_gate and execution_gate.get("status") == "needs_review":
-            # For M4 read-only tools, we still allow inspection but record reason; caller can tighten later.
-            return PolicyDecision(True, "Allowed read-only tool; plan execution gate needs review.")
-        return PolicyDecision(True, "Allowed by read-only allowlist policy.")
+
+        gate_status = str((execution_gate or {}).get("status", "unknown"))
+        approved = bool((approval or {}).get("approved", False))
+
+        if read_only:
+            if not self.allow_read_only:
+                return PolicyDecision(False, "Read-only tools are disabled by policy.")
+            if gate_status == "needs_review":
+                return PolicyDecision(True, "Allowed read-only tool; plan execution gate needs review.")
+            return PolicyDecision(True, "Allowed by read-only allowlist policy.")
+
+        if not self.allow_mutating:
+            return PolicyDecision(False, f"Tool '{tool_name}' is mutating; mutating tools are disabled.")
+        if gate_status != "ready":
+            return PolicyDecision(False, f"Tool '{tool_name}' is mutating; execution gate is {gate_status}.")
+        if not approved:
+            return PolicyDecision(False, f"Tool '{tool_name}' is mutating; explicit approval required.")
+        return PolicyDecision(True, "Allowed mutating tool by explicit approval and ready gate.")

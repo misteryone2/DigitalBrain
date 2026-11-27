@@ -227,6 +227,45 @@ class CLITests(unittest.TestCase):
             self.assertEqual(code, 1)
             self.assertIn("outside allowed workspace", out.getvalue())
 
+    def test_mutating_tool_requires_approval_and_ready_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            plan_db = root / "plans.db"
+            from digitalbrain.planning import SQLitePlanStore
+            with SQLitePlanStore(plan_db) as store:
+                plan = store.save_plan(
+                    goal="Write",
+                    status="accepted",
+                    steps=[{"id": "step-1", "title": "Write", "status": "pending"}],
+                    source="test",
+                    metadata={"execution_gate": {"status": "ready", "executable": True, "reasons": []}},
+                )
+
+            # Missing --allow-mutating-tools / approval
+            out = io.StringIO()
+            with redirect_stdout(out):
+                code = main([
+                    "--workspace", str(root), "--plan-db", str(plan_db), "--tool-plan-id", plan.id,
+                    "--run-tool", "write_file", "--tool-args", json.dumps({"path": "a.txt", "content": "hi", "overwrite": True})
+                ])
+            self.assertEqual(code, 1)
+            self.assertIn("mutating", out.getvalue().lower())
+
+            # Approve then run
+            with redirect_stdout(io.StringIO()):
+                code = main(["--plan-db", str(plan_db), "--approve-plan-execution", plan.id, "--reason", "ok"])
+            self.assertEqual(code, 0)
+
+            out = io.StringIO()
+            with redirect_stdout(out):
+                code = main([
+                    "--workspace", str(root), "--plan-db", str(plan_db), "--tool-plan-id", plan.id,
+                    "--allow-mutating-tools",
+                    "--run-tool", "write_file", "--tool-args", json.dumps({"path": "a.txt", "content": "hi", "overwrite": True})
+                ])
+            self.assertEqual(code, 0)
+            self.assertTrue((root / "a.txt").exists())
+
 
 if __name__ == "__main__":
     unittest.main()
