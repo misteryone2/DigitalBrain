@@ -69,8 +69,6 @@ class ExecutionPolicy:
             return PolicyDecision(False, f"Tool '{tool_name}' is mutating; execution gate is {gate_status}.")
         if not approved:
             return PolicyDecision(False, f"Tool '{tool_name}' is mutating; explicit approval required.")
-        if require_container_for_mutating and sandbox_mode != "container":
-            return PolicyDecision(False, f"Tool '{tool_name}' is mutating; container sandbox required (mode={sandbox_mode or 'unknown'}).")
 
         approved_tool = (approval or {}).get("tool_name")
         if approved_tool and approved_tool != tool_name:
@@ -96,4 +94,6 @@ class ExecutionPolicy:
             return PolicyDecision(False, "Execution approval is already reserved.")
         if (approval or {}).get("consumed_at"):
             return PolicyDecision(False, "Execution approval has already been consumed.")
+        if require_container_for_mutating and sandbox_mode != "container":
+            return PolicyDecision(False, f"Tool '{tool_name}' is mutating; container sandbox required (mode={sandbox_mode or 'unknown'}).")
         return PolicyDecision(True, "Allowed mutating tool by explicit approval and ready gate.")
