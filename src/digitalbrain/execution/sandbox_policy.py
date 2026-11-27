@@ -46,6 +46,8 @@ class SandboxPolicyConfig:
     container_image: str = "python:3.12-slim"
     allowed_image_digests: tuple[str, ...] = ()
     require_image_digest: bool = False
+    require_attestation: bool = False
+    attestation_path: str | None = None
     container_seccomp: str | None = None
     container_apparmor: str | None = None
     require_seccomp: bool = False
@@ -85,6 +87,8 @@ class SandboxPolicyConfig:
             container_image=os.environ.get("DIGITALBRAIN_CONTAINER_IMAGE", "python:3.12-slim"),
             allowed_image_digests=allowed,
             require_image_digest=_env_bool("DIGITALBRAIN_REQUIRE_IMAGE_DIGEST", False),
+            require_attestation=_env_bool("DIGITALBRAIN_REQUIRE_ATTESTATION", False),
+            attestation_path=os.environ.get("DIGITALBRAIN_ATTESTATION_PATH"),
             container_seccomp=os.environ.get("DIGITALBRAIN_CONTAINER_SECCOMP"),
             container_apparmor=os.environ.get("DIGITALBRAIN_CONTAINER_APPARMOR"),
             require_seccomp=_env_bool("DIGITALBRAIN_REQUIRE_SECCOMP", False),
@@ -109,6 +113,8 @@ class SandboxPolicyConfig:
             container_image=str(data.get("container_image", "python:3.12-slim")),
             allowed_image_digests=allowed,
             require_image_digest=bool(data.get("require_image_digest", False)),
+            require_attestation=bool(data.get("require_attestation", False)),
+            attestation_path=data.get("attestation_path"),
             container_seccomp=data.get("container_seccomp"),
             container_apparmor=data.get("container_apparmor"),
             require_seccomp=bool(data.get("require_seccomp", False)),
@@ -125,6 +131,8 @@ class SandboxPolicyConfig:
             "container_image": self.container_image,
             "allowed_image_digests": list(self.allowed_image_digests),
             "require_image_digest": self.require_image_digest,
+            "require_attestation": self.require_attestation,
+            "attestation_path": self.attestation_path,
             "container_seccomp": self.container_seccomp,
             "container_apparmor": self.container_apparmor,
             "require_seccomp": self.require_seccomp,
