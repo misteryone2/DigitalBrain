@@ -113,7 +113,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--limit",
         type=int,
         default=10,
-        help="Maximum number of memory records to list (default: 10).",
+        help="Maximum number of records to list (default: 10).",
+    )
+    parser.add_argument(
+        "--offset",
+        type=int,
+        default=0,
+        help="Number of records to skip when listing (default: 0).",
     )
     parser.add_argument(
         "--include-superseded",
@@ -225,6 +231,7 @@ def _print_record(record: object) -> None:
 def _print_memory_records(store: SQLiteMemoryStore, args: argparse.Namespace) -> int:
     records = store.list_records(
         limit=args.limit,
+        offset=args.offset,
         memory_type=args.memory_type,
         source=args.source,
         include_superseded=args.include_superseded,
@@ -516,7 +523,7 @@ def main(argv: list[str] | None = None) -> int:
                     return 1
                 _print_plan(plan)
                 return 0
-            records = plans.list_plans(limit=args.limit)
+            records = plans.list_plans(limit=args.limit, offset=args.offset)
             if not records:
                 print("No plan records found.")
                 return 0
@@ -620,6 +627,7 @@ def main(argv: list[str] | None = None) -> int:
                 return 0
             facts = knowledge.list_facts(
                 limit=args.limit,
+                offset=args.offset,
                 include_superseded=args.include_superseded,
                 search=args.search_facts,
             )

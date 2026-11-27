@@ -182,6 +182,7 @@ class SQLiteMemoryStore:
         self,
         *,
         limit: int = 100,
+        offset: int = 0,
         memory_type: MemoryType | str | None = None,
         source: str | None = None,
         include_superseded: bool = False,
@@ -189,6 +190,8 @@ class SQLiteMemoryStore:
     ) -> list[MemoryRecord]:
         if limit <= 0:
             raise ValueError("Limit must be greater than zero.")
+        if offset < 0:
+            raise ValueError("Offset must be zero or greater.")
 
         query = ["SELECT * FROM memory_records WHERE 1=1"]
         params: list[Any] = []
@@ -212,8 +215,8 @@ class SQLiteMemoryStore:
             params.append(f"%{normalized_search}%")
         if not include_superseded:
             query.append("AND superseded_by IS NULL")
-        query.append("ORDER BY created_at DESC, rowid DESC LIMIT ?")
-        params.append(limit)
+        query.append("ORDER BY created_at DESC, rowid DESC LIMIT ? OFFSET ?")
+        params.extend([limit, offset])
 
         rows = self._connection.execute("\n".join(query), params).fetchall()
         return [self._row_to_record(row) for row in rows]

@@ -165,6 +165,7 @@ class SQLiteKnowledgeStore:
         self,
         *,
         limit: int = 100,
+        offset: int = 0,
         subject: str | None = None,
         predicate: str | None = None,
         source: str | None = None,
@@ -173,6 +174,8 @@ class SQLiteKnowledgeStore:
     ) -> list[KnowledgeRecord]:
         if limit <= 0:
             raise ValueError("Limit must be greater than zero.")
+        if offset < 0:
+            raise ValueError("Offset must be zero or greater.")
         query = ["SELECT * FROM knowledge_records WHERE 1=1"]
         params: list[Any] = []
         for field, value in (("subject", subject), ("predicate", predicate), ("source", source)):
@@ -187,8 +190,8 @@ class SQLiteKnowledgeStore:
             params.extend([like, like, like])
         if not include_superseded:
             query.append("AND superseded_by IS NULL")
-        query.append("ORDER BY created_at DESC, rowid DESC LIMIT ?")
-        params.append(limit)
+        query.append("ORDER BY created_at DESC, rowid DESC LIMIT ? OFFSET ?")
+        params.extend([limit, offset])
         rows = self._connection.execute("\n".join(query), params).fetchall()
         return [self._row_to_record(row) for row in rows]
 

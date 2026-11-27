@@ -190,9 +190,11 @@ class SQLitePlanStore:
         row = self._get_row(plan_id)
         return self._row_to_record(row) if row else None
 
-    def list_plans(self, *, limit: int = 100, goal: str | None = None) -> list[PlanRecord]:
+    def list_plans(self, *, limit: int = 100, offset: int = 0, goal: str | None = None) -> list[PlanRecord]:
         if limit <= 0:
             raise ValueError("Limit must be greater than zero.")
+        if offset < 0:
+            raise ValueError("Offset must be zero or greater.")
         query = ["SELECT * FROM plan_records WHERE 1=1"]
         params: list[Any] = []
         if goal is not None:
@@ -201,8 +203,8 @@ class SQLitePlanStore:
                 raise ValueError("Goal filter must not be empty.")
             query.append("AND goal = ?")
             params.append(goal_n)
-        query.append("ORDER BY created_at DESC, rowid DESC LIMIT ?")
-        params.append(limit)
+        query.append("ORDER BY created_at DESC, rowid DESC LIMIT ? OFFSET ?")
+        params.extend([limit, offset])
         rows = self._connection.execute("\n".join(query), params).fetchall()
         return [self._row_to_record(r) for r in rows]
 
