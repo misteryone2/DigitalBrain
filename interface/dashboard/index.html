@@ -68,14 +68,15 @@
         <div class="meta">Summary derived only from endpoint responses in this snapshot.</div>
         <div class="kpis">
           <div class="kpi"><div class="label">API health</div><div class="value" id="kpiHealth">—</div><div class="hint" id="kpiHealthHint">/v1/health</div></div>
-          <div class="kpi"><div class="label">Plans returned</div><div class="value" id="kpiPlans">—</div><div class="hint">/v1/plans?limit=10</div></div>
+          <div class="kpi"><div class="label">Plans / Memory</div><div class="value" id="kpiPlans">—</div><div class="hint" id="kpiPlansHint">/v1/plans · /v1/memory</div></div>
           <div class="kpi"><div class="label">Outcome signal</div><div class="value" id="kpiOutcomes">—</div><div class="hint" id="kpiOutcomesHint">summary/regression</div></div>
           <div class="kpi"><div class="label">Promotions returned</div><div class="value" id="kpiPromotions">—</div><div class="hint">/v1/promotions?limit=10</div></div>
         </div>
       </section>
 
       <section class="panel card span-4"><h2>Health</h2><div class="meta">Service status from <span class="mono">/v1/health</span>.</div><div id="health" class="empty">Not loaded.</div></section>
-      <section class="panel card span-8"><h2>Plans</h2><div class="meta">Recent plans from <span class="mono">/v1/plans</span>. Read-only.</div><div id="plans" class="empty">Not loaded.</div></section>
+      <section class="panel card span-4"><h2>Plans</h2><div class="meta">Recent plans from <span class="mono">/v1/plans</span>.</div><div id="plans" class="empty">Not loaded.</div></section>
+      <section class="panel card span-4"><h2>Memory</h2><div class="meta">Recent memory records from <span class="mono">/v1/memory</span>.</div><div id="memory" class="empty">Not loaded.</div></section>
       <section class="panel card span-6"><h2>Outcomes</h2><div class="meta">Summary, regression, and recent outcomes from <span class="mono">/v1/outcomes</span>.</div><div id="outcomes" class="empty">Not loaded.</div></section>
       <section class="panel card span-6"><h2>Promotions</h2><div class="meta">Promotion/rollback records from <span class="mono">/v1/promotions</span>.</div><div id="promotions" class="empty">Not loaded.</div></section>
       <section class="panel card span-12"><h2>Audit</h2><div class="meta">Recent audit events from <span class="mono">/v1/audit</span>, if configured and authorized.</div><div id="audit" class="empty">Not loaded.</div></section>
@@ -87,7 +88,7 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const endpoints = [
-  ['health','/v1/health'], ['plans','/v1/plans?limit=10'], ['outcomes','/v1/outcomes?limit=10'],
+  ['health','/v1/health'], ['plans','/v1/plans?limit=10'], ['memory','/v1/memory?limit=8'], ['outcomes','/v1/outcomes?limit=10'],
   ['promotions','/v1/promotions?limit=10'], ['audit','/v1/audit?limit=10']
 ];
 
@@ -124,14 +125,28 @@ function renderHealth(data){
 
 function renderPlans(data){
   const plans = Array.isArray(data.plans) ? data.plans : [];
-  $('kpiPlans').textContent = String(plans.length);
+  window.__planCount = plans.length;
+  const mem = window.__memoryCount; $('kpiPlans').textContent = mem==null ? String(plans.length) : `${plans.length}/${mem}`;
   if(!plans.length) return `<div class="empty">No plans returned by API.</div>${rawDetails(data)}`;
   const rows = plans.map(p => {
     const st = String(p.status||'unknown');
     const kind = st==='completed'?'ok':st==='failed'?'bad':st==='blocked'?'warn':'neutral';
-    return `<tr><td class="mono">${esc(p.id||'—')}</td><td>${esc(p.goal||'—')}</td><td>${badge(st,kind)}</td><td>${esc(fmtTime(p.updated_at||p.created_at))}</td></tr>`;
+    return `<tr><td class="mono">${esc((p.id||'—').slice(0,10))}</td><td>${esc((p.goal||'—').slice(0,48))}</td><td>${badge(st,kind)}</td></tr>`;
   }).join('');
-  return `<table><thead><tr><th>ID</th><th>Goal</th><th>Status</th><th>Updated</th></tr></thead><tbody>${rows}</tbody></table>${rawDetails(data)}`;
+  return `<table><thead><tr><th>ID</th><th>Goal</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>${rawDetails(data)}`;
+}
+
+function renderMemory(data){
+  const mem = Array.isArray(data.memory) ? data.memory : [];
+  window.__memoryCount = mem.length;
+  const plans = window.__planCount; $('kpiPlans').textContent = plans==null ? String(mem.length) : `${plans}/${mem}`;
+  if(!mem.length) return `<div class="empty">No memory records returned by API.</div>${rawDetails(data)}`;
+  const rows = mem.slice(0,8).map(m => {
+    const st = String(m.status||'active');
+    const kind = st==='active'?'ok':st==='superseded'?'warn':'neutral';
+    return `<tr><td>${esc(m.memory_type||'—')}</td><td>${esc((m.content||'—').slice(0,56))}</td><td>${badge(st,kind)}</td></tr>`;
+  }).join('');
+  return `<table><thead><tr><th>Type</th><th>Content</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>${rawDetails(data)}`;
 }
 
 function renderOutcomes(data){
@@ -176,10 +191,10 @@ function renderAudit(data){
   return `<table><thead><tr><th>Time</th><th>Kind</th><th>Result</th><th>Tool/Ref</th></tr></thead><tbody>${rows}</tbody></table>${rawDetails(data)}`;
 }
 
-const renderers = {health:renderHealth, plans:renderPlans, outcomes:renderOutcomes, promotions:renderPromotions, audit:renderAudit};
+const renderers = {health:renderHealth, plans:renderPlans, memory:renderMemory, outcomes:renderOutcomes, promotions:renderPromotions, audit:renderAudit};
 
 function clearUI(){
-  for(const [id] of endpoints){ $(id).innerHTML = '<div class="empty">Not loaded.</div>'; }
+  for(const [id] of endpoints){ $(id).innerHTML = '<div class="empty">Not loaded.</div>'; } window.__planCount=null; window.__memoryCount=null;
   $('kpiHealth').textContent='—'; $('kpiHealthHint').textContent='/v1/health'; $('kpiPlans').textContent='—';
   $('kpiOutcomes').textContent='—'; $('kpiOutcomesHint').textContent='summary/regression'; $('kpiPromotions').textContent='—';
   $('status').textContent='Cleared. No data is displayed.'; $('lastLoaded').textContent='Never loaded'; setGlobal('Not loaded','');
