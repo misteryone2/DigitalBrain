@@ -122,7 +122,13 @@ class Handler(BaseHTTPRequestHandler):
                     rows = [asdict(r) if is_dataclass(r) else r.__dict__ for r in store.list_outcomes(limit=limit)]
                     summary = store.summary()
                     regression = store.detect_regressions()
-                _json(self, 200, {"outcomes": rows, "summary": summary, "regression": regression, "version": "v1"})
+                gate = None
+                base = (qs.get("baseline_ref") or [None])[0]
+                cand = (qs.get("candidate_ref") or [None])[0]
+                kind = (qs.get("kind") or [None])[0]
+                if base and cand and kind:
+                    gate = evaluate_promotion_gate(store, kind=kind, baseline_ref=base, candidate_ref=cand)
+                _json(self, 200, {"outcomes": rows, "summary": summary, "regression": regression, "evaluation_gate": gate, "version": "v1"})
                 return
             if parsed.path in {"/promotions", "/v1/promotions"}:
                 if not self._scope_ok("read:promotions"):

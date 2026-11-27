@@ -38,7 +38,17 @@ paths:
         '200': { description: OK }
   /v1/outcomes:
     get:
-      summary: List outcomes, summary, regression signal
+      summary: List outcomes, summary, regression signal, optional evaluation gate
+      parameters:
+        - in: query
+          name: kind
+          schema: { type: string }
+        - in: query
+          name: baseline_ref
+          schema: { type: string }
+        - in: query
+          name: candidate_ref
+          schema: { type: string }
       responses:
         '200': { description: OK }
         '403': { description: Forbidden by scope }
