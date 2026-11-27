@@ -79,6 +79,7 @@ This roadmap turns the [founding vision](VISION.md) into incremental, verifiable
 ## M7 â€” Interfaces and observability
 - [x] Authenticated read-only API baseline (`digitalbrain.api.server`, token env, no mutation endpoints)
 - [x] Versioned read-only endpoints (`/v1/*`) exposing real configured stores; minimal scope RBAC via `DIGITALBRAIN_API_SCOPES`
-- [ ] Dashboard reflecting real system state
+- [x] OpenAPI static spec (`docs/openapi.yaml`) and static read-only dashboard consuming `/v1/*` (snapshot, no mock runtime state)
+- [ ] Dashboard reflecting real system state (full live ops view, no mock-as-live)
 - [ ] 3D architecture visualization backed by live data
 - [ ] Desktop/mobile client access
