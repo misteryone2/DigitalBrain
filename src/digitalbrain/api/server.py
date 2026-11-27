@@ -79,9 +79,9 @@ class Handler(BaseHTTPRequestHandler):
                 _json(self, 200, {"ok": True, "service": "digitalbrain-api", "version": "v1"})
                 return
             if parsed.path in {"/plans", "/v1/plans"}:
-            if not self._scope_ok("read:plans"):
-                _json(self, 403, {"error": "forbidden"})
-                return
+                if not self._scope_ok("read:plans"):
+                    _json(self, 403, {"error": "forbidden"})
+                    return
                 if not self.config.plan_db:
                     _json(self, 400, {"error": "DIGITALBRAIN_PLAN_DB not configured"})
                     return
@@ -90,9 +90,9 @@ class Handler(BaseHTTPRequestHandler):
                 _json(self, 200, {"plans": plans, "version": "v1"})
                 return
             if parsed.path in {"/memory", "/v1/memory"}:
-            if not self._scope_ok("read:memory"):
-                _json(self, 403, {"error": "forbidden"})
-                return
+                if not self._scope_ok("read:memory"):
+                    _json(self, 403, {"error": "forbidden"})
+                    return
                 if not self.config.memory_db:
                     _json(self, 400, {"error": "DIGITALBRAIN_MEMORY_DB not configured"})
                     return
@@ -101,9 +101,9 @@ class Handler(BaseHTTPRequestHandler):
                 _json(self, 200, {"memory": recs, "version": "v1"})
                 return
             if parsed.path in {"/audit", "/v1/audit"}:
-            if not self._scope_ok("read:audit"):
-                _json(self, 403, {"error": "forbidden"})
-                return
+                if not self._scope_ok("read:audit"):
+                    _json(self, 403, {"error": "forbidden"})
+                    return
                 if not self.config.audit_db:
                     _json(self, 400, {"error": "DIGITALBRAIN_AUDIT_DB not configured"})
                     return
@@ -112,9 +112,9 @@ class Handler(BaseHTTPRequestHandler):
                 _json(self, 200, {"audit": ev, "version": "v1"})
                 return
             if parsed.path in {"/outcomes", "/v1/outcomes"}:
-            if not self._scope_ok("read:outcomes"):
-                _json(self, 403, {"error": "forbidden"})
-                return
+                if not self._scope_ok("read:outcomes"):
+                    _json(self, 403, {"error": "forbidden"})
+                    return
                 if not self.config.outcomes_db:
                     _json(self, 400, {"error": "DIGITALBRAIN_OUTCOMES_DB not configured"})
                     return
@@ -125,9 +125,9 @@ class Handler(BaseHTTPRequestHandler):
                 _json(self, 200, {"outcomes": rows, "summary": summary, "regression": regression, "version": "v1"})
                 return
             if parsed.path in {"/promotions", "/v1/promotions"}:
-            if not self._scope_ok("read:promotions"):
-                _json(self, 403, {"error": "forbidden"})
-                return
+                if not self._scope_ok("read:promotions"):
+                    _json(self, 403, {"error": "forbidden"})
+                    return
                 if not self.config.promotion_db:
                     _json(self, 400, {"error": "DIGITALBRAIN_PROMOTION_DB not configured"})
                     return

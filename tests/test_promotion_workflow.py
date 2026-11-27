@@ -8,9 +8,9 @@ class PromotionWorkflowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db = Path(tmp)/'p.db'
             with SQLitePromotionStore(db) as store:
-                store.record(artifact='a', from_env='lab', to_env='validation', status='proposed', reason='test')
                 with self.assertRaises(ValueError):
                     store.record(artifact='a', from_env='validation', to_env='production', status='promoted', reason='skip', metadata={'human_approval': True})
+                store.record(artifact='a', from_env='validation', to_env='production', status='proposed', reason='candidate', metadata={'human_approval': True})
                 store.record(artifact='a', from_env='validation', to_env='production', status='approved', reason='ok', metadata={'human_approval': True})
                 rec = store.record(artifact='a', from_env='validation', to_env='production', status='promoted', reason='ok', metadata={'human_approval': True})
                 self.assertEqual(rec.status, 'promoted')

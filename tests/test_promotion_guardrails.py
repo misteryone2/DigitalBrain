@@ -10,7 +10,9 @@ class PromotionGuardrailTests(unittest.TestCase):
             with SQLitePromotionStore(db) as store:
                 with self.assertRaises(ValueError):
                     store.record(artifact='a', from_env='validation', to_env='production', status='promoted', reason='auto', metadata={})
-                rec = store.record(artifact='a', from_env='validation', to_env='production', status='promoted', reason='approved', metadata={'human_approval': True})
+                store.record(artifact='a', from_env='validation', to_env='production', status='proposed', reason='candidate', metadata={'human_approval': True})
+                store.record(artifact='a', from_env='validation', to_env='production', status='approved', reason='approved', metadata={'human_approval': True})
+                rec = store.record(artifact='a', from_env='validation', to_env='production', status='promoted', reason='promoted', metadata={'human_approval': True})
                 self.assertEqual(rec.status, 'promoted')
 
 if __name__=='__main__':
