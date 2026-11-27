@@ -39,7 +39,7 @@ This roadmap turns the [founding vision](VISION.md) into incremental, verifiable
 - [x] Plan lifecycle statuses and deterministic execution gate
 - [x] Step outcome recording (explicit command/API) and gate metadata refresh
 - [x] Failure-driven replanning proposals (explicit, non-autonomous)
-- [ ] Measurable planning benchmarks and failure/replanning scenarios
+- [x] Measurable deterministic benchmarks: planning structure, failure->replan proposal, explicit replanning versioning (`planning.benchmarks`, `tests/test_planning_benchmarks.py`)
 ## M4 - Safe execution and tools
 - [x] Read-only tool registry (`list_dir`, `read_file`, `grep`, workspace-bounded)
 - [x] Permission model baseline: default-deny allowlist, mutating tools blocked by default
@@ -51,11 +51,12 @@ This roadmap turns the [founding vision](VISION.md) into incremental, verifiable
 - [x] Admin approval recovery: explicit list/resolve reserved approvals (audited, no auto-recovery)
 - [x] Controlled mutating low-risk tools: `write_file`, `mkdir` (policy-gated, CLI opt-in + approval + ready gate required)
 - [x] Sandbox hardening baseline: subprocess worker for default tools, timeout, best-effort process-tree kill, arg/output limits, per-tool output caps, symlink-path rejection, risk-class enforcement
-- [x] Docker container sandbox mode (`--sandbox-mode host|container|auto`) with network-off/read-only/caps/resource flags
+- [x] Docker container sandbox mode (`host|container|auto|required`) with network-off/read-only/cpu/memory/pids/cap-drop/no-new-privileges/tmpfs
 - [x] Policy: mutating tools denied unless sandbox resolves to container
+- [x] Hardening options: optional image digest requirement, optional seccomp/apparmor profiles, env-configurable sandbox policy, container manifest audit (`tool.sandbox_manifest`)
 - [x] Audit logs for tool actions/decisions (`tool.requested/allowed/denied/executed/failed`) and approval lifecycle events
-- [x] CLI tool inspection/execution commands (`--list-tools`, `--run-tool`, `--approve-plan-execution`, `--allow-mutating-tools`, `--list-approvals`, `--resolve-approval`, `--sandbox-mode`)
-- [ ] Hardened container-grade isolation by default across environments (image pinning/provenance, seccomp/apparmor profiles, audited quotas, signed policy)
+- [x] CLI tool inspection/execution commands (`--list-tools`, `--run-tool`, `--approve-plan-execution`, `--allow-mutating-tools`, `--list-approvals`, `--resolve-approval`, sandbox options)
+- [ ] Hardened container-grade isolation by default across environments (signed image provenance/attestation, enforced host baseline, centralized signed policy, non-Docker/containerd parity)
 - [ ] Broader mutating tool set with per-tool risk classes and human approval workflow
 
 ## M5 — Learning and metacognition
