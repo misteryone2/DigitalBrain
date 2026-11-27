@@ -1,5 +1,6 @@
-"""Execution/tooling components (M4 read-only baseline)."""
+"""Execution/tooling components (M4 baseline + sandbox hardening)."""
 
+from .config import SandboxConfig
 from .executor import ToolExecutionResult, ToolExecutor
 from .policy import ExecutionPolicy, PolicyDecision
 from .tools import ToolSpec, default_readonly_tools, default_tools
@@ -7,6 +8,7 @@ from .tools import ToolSpec, default_readonly_tools, default_tools
 __all__ = [
     "ExecutionPolicy",
     "PolicyDecision",
+    "SandboxConfig",
     "ToolExecutionResult",
     "ToolExecutor",
     "ToolSpec",

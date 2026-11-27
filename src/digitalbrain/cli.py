@@ -231,6 +231,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Require --container-image to include @sha256:... digest. Env: DIGITALBRAIN_REQUIRE_IMAGE_DIGEST.",
     )
     parser.add_argument(
+        "--host-job-limits",
+        action=argparse.BooleanOptionalAction,
+        default=os.environ.get("DIGITALBRAIN_HOST_JOB_LIMITS", "1").lower() in {"1", "true", "yes", "on"},
+        help="Apply Windows Job Object limits to host subprocess sandbox (default: enabled). Env: DIGITALBRAIN_HOST_JOB_LIMITS.",
+    )
+    parser.add_argument(
         "--list-approvals",
         action="store_true",
         help="List execution approvals from --plan-db (optionally --get-plan/--approval-state filters).",
@@ -580,6 +586,7 @@ def main(argv: list[str] | None = None) -> int:
                     container_seccomp=args.container_seccomp,
                     container_apparmor=args.container_apparmor,
                     require_image_digest=bool(args.require_image_digest),
+                    host_job_limits=bool(args.host_job_limits),
                 )
                 for spec in executor.list_tools():
                     ro = "read-only" if spec["read_only"] else "mutating"
@@ -627,6 +634,7 @@ def main(argv: list[str] | None = None) -> int:
                 container_seccomp=args.container_seccomp,
                 container_apparmor=args.container_apparmor,
                 require_image_digest=bool(args.require_image_digest),
+                host_job_limits=bool(args.host_job_limits),
             )
 
             result = executor.execute(args.run_tool, tool_args, execution_gate=gate, approval=approval)
