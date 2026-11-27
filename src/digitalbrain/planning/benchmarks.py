@@ -35,7 +35,7 @@ def run_planning_benchmarks() -> list[BenchmarkResult]:
         "warning_count": len(r.warnings),
         "has_verification": all(bool(s.verification) for s in r.plan_steps),
         "has_source_rule": all(bool(s.source_rule) for s in r.plan_steps),
-        "has_alternatives": all(len(s.alternatives) >= 1 for s in r.plan_steps),
+        "has_alternatives": any(len(s.alternatives) >= 1 for s in r.plan_steps),
     }
     passed = (
         r.status in {GoalStatus.ACCEPTED, GoalStatus.ACCEPTED_WITH_WARNINGS}

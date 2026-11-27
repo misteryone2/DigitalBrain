@@ -247,7 +247,15 @@ class ToolExecutor:
 
         default_names = set(default_tools(self.workspace_root).keys())
         if self.isolated and spec.name in default_names:
-            mode = sandbox_mode or self._resolve_sandbox_mode()
+            mode = sandbox_mode
+            if mode in {None, "", "unknown", "unavailable"}:
+                mode = self._resolve_sandbox_mode()
+            if mode == "container":
+                return self._run_in_container(spec, args)
+            if mode == "host":
+                return self._run_in_host_process(spec, args)
+            # Unknown/unresolved mode - resolve deterministically
+            mode = self._resolve_sandbox_mode()
             if mode == "container":
                 return self._run_in_container(spec, args)
             return self._run_in_host_process(spec, args)
@@ -427,11 +435,11 @@ class ToolExecutor:
         img = (image or "").strip()
         if not img:
             raise ValueError("Container image must not be empty.")
-        if self.require_image_digest and "@sha256:" not in img:
-            raise ValueError("Container image must be pinned by digest when require_image_digest is enabled.")
         allowed = tuple(self.sandbox_policy.allowed_image_digests or ())
         if allowed and img not in allowed:
             raise ValueError("Container image is not in allowed image digest allowlist.")
+        if self.require_image_digest and "@sha256:" not in img:
+            raise ValueError("Container image must be pinned by digest when require_image_digest is enabled.")
         if self.sandbox_policy.require_seccomp and not self.container_seccomp:
             raise ValueError("Seccomp profile required by sandbox policy.")
         if self.sandbox_policy.require_apparmor and not self.container_apparmor:

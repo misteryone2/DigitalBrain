@@ -65,12 +65,12 @@ class ExecutionPolicy:
 
         if not self.allow_mutating:
             return PolicyDecision(False, f"Tool '{tool_name}' is mutating; mutating tools are disabled.")
-        if require_container_for_mutating and sandbox_mode != "container":
-            return PolicyDecision(False, f"Tool '{tool_name}' is mutating; container sandbox required (mode={sandbox_mode or 'unknown'}).")
         if gate_status != "ready":
             return PolicyDecision(False, f"Tool '{tool_name}' is mutating; execution gate is {gate_status}.")
         if not approved:
             return PolicyDecision(False, f"Tool '{tool_name}' is mutating; explicit approval required.")
+        if require_container_for_mutating and sandbox_mode != "container":
+            return PolicyDecision(False, f"Tool '{tool_name}' is mutating; container sandbox required (mode={sandbox_mode or 'unknown'}).")
 
         approved_tool = (approval or {}).get("tool_name")
         if approved_tool and approved_tool != tool_name:
