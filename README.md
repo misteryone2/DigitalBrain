@@ -1,8 +1,8 @@
-# DigitalBrain
+﻿# DigitalBrain
 
 DigitalBrain is an independent, modular software project for building an autonomous digital assistant that can reason over goals, manage memory, use tools, write and test code, and improve through measured experiments.
 
-The project is developed incrementally. The first milestone is a small, testable Python core—not a claim of general intelligence.
+The project is developed incrementally. The first milestone is a small, testable Python coreâ€”not a claim of general intelligence.
 
 ## Current status
 
@@ -32,11 +32,11 @@ The project is developed incrementally. The first milestone is a small, testable
 - [x] Deterministic failure gate and explicit replan proposals for critical/blocked failed steps (no auto-replan)
 - [x] M4 baseline: read-only tool registry (`list_dir`, `read_file`, `grep`) with workspace boundary, allowlist policy, execution gate awareness, and audit events
 - [x] M4 hardening baseline: mutating tools disabled by default; explicit approval + ready gate required for mutating execution; `write_file` exists but is policy-gated (no auto-execution)
-- [x] M4 sandbox hardening: isolated worker default tools, per-tool timeout, bounded args/outputs, output caps, symlink-path rejection, risk-class metadata, scoped approvals, risk-class enforcement, single-use reserve/finalize approval lifecycle, approval expiration, Docker container mode (`host/container/auto/required`); **mutating tools require container sandbox**; optional digest/seccomp/apparmor/env policy + sandbox manifest audit
+- [x] M4 sandbox hardening: isolated worker default tools, per-tool timeout, bounded args/outputs, output caps, symlink-path rejection, risk-class metadata, scoped approvals, risk-class enforcement, single-use reserve/finalize approval lifecycle, approval expiration, Docker container mode (`host/container/auto/required`); **mutating tools require container sandbox**; digest allowlist/profile requirements, pluggable attestation command hook, policy validation CLI, sandbox manifest/attestation audit
 - [x] M3 measurable deterministic benchmarks: planning structure, failure->replan proposal, explicit replanning versioning
-- [x] M5 baseline: outcome recording, deterministic metrics summary, capability/error report (no autonomous self-modification)
-- [x] M6 baseline: lab/validation/production promotion/rollback records (no autonomous deployment)
-- [x] M7 baseline: authenticated read-only API exposing real configured stores (no mutation endpoints)
+- [x] M5 baseline: outcome recording, deterministic metrics/regression, baseline-vs-candidate comparison (no autonomous self-modification/action)
+- [x] M6 baseline: lab/validation/production promotion/rollback records; workflow guardrails; production requires human approval + evaluation gate evidence (no autonomous deployment)
+- [x] M7 baseline: authenticated read-only API `/v1/*` with minimal scopes, OpenAPI static spec, static read-only dashboard consuming real API (no mutation endpoints)
 - [x] Approval expiration (`expires_at`) and admin recovery: list/resolve reserved approvals (audited, no auto-recovery)
 - [x] Controlled low-risk mutating tools: `write_file`, `mkdir` (policy-gated, approval+ready+opt-in required)
 
@@ -63,6 +63,9 @@ The project is developed incrementally. The first milestone is a small, testable
     digitalbrain --plan-db .\data\plans.db --list-plans
     digitalbrain --plan-db .\data\plans.db --audit-db .\data\audit.db --replan "Improve Project database" --reason "resolved conflict"
     digitalbrain --audit-db .\data\audit.db --list-audit
+    digitalbrain --outcomes-db .\data\outcomes.db --compare-outcomes bench baseline candidate
+    digitalbrain --validate-sandbox-policy .\policy.json
+    $env:DIGITALBRAIN_API_TOKEN='change-me'; digitalbrain --serve-api --plan-db .\data\plans.db --memory-db .\data\memory.db
 
 Run tests:
 

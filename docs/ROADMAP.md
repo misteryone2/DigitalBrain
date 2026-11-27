@@ -1,14 +1,14 @@
-# Roadmap
+﻿# Roadmap
 
 This roadmap turns the [founding vision](VISION.md) into incremental, verifiable milestones. Items are marked complete only when implemented, tested, and documented.
 
-## M0 — Foundation
+## M0 â€” Foundation
 - [x] Python package and CLI
 - [x] Deterministic goal intake and starter plan
 - [x] Unit tests
 - [x] Founding vision and architecture alignment
 
-## M1 — Memory
+## M1 â€” Memory
 - [x] SQLite persistence layer
 - [x] Memory records with id, timestamp, type, source, content, confidence, and metadata
 - [x] Correction and supersession support with traceability
@@ -19,7 +19,7 @@ This roadmap turns the [founding vision](VISION.md) into incremental, verifiable
 - [x] Memory API hardening: search/stats/get/correct CLI, source filter, schema versioning (`PRAGMA user_version`)
 - [ ] Memory migrations beyond v1 and richer query/indexing (FTS, pagination)
 
-## M2 — Knowledge and context
+## M2 â€” Knowledge and context
 - [x] Structured knowledge records/facts with provenance
 - [x] Knowledge persistence/query/correction with tests
 - [x] CLI knowledge commands (add/list/search/stats)
@@ -53,30 +53,32 @@ This roadmap turns the [founding vision](VISION.md) into incremental, verifiable
 - [x] Sandbox hardening baseline: subprocess worker for default tools, timeout, best-effort process-tree kill, arg/output limits, per-tool output caps, symlink-path rejection, risk-class enforcement
 - [x] Docker container sandbox mode (`host|container|auto|required`) with network-off/read-only/cpu/memory/pids/cap-drop/no-new-privileges/tmpfs
 - [x] Policy: mutating tools denied unless sandbox resolves to container
-- [x] Hardening options: digest requirement/allowlist, optional/required seccomp/apparmor, env+signed policy file, attestation file verification, Windows host Job Object limits (best-effort), container manifest audit (`tool.sandbox_manifest`)
+- [x] Hardening options: digest requirement/allowlist, optional/required seccomp/apparmor, env+signed policy file, attestation file/pluggable command hook, hardened profile defaults, policy validation CLI, Windows host Job Object limits (best-effort), manifest/attestation audit (`tool.sandbox_manifest`, `tool.attestation`)
 - [x] Audit logs for tool actions/decisions (`tool.requested/allowed/denied/executed/failed`) and approval lifecycle events
 - [x] CLI tool inspection/execution commands (`--list-tools`, `--run-tool`, `--approve-plan-execution`, `--allow-mutating-tools`, `--list-approvals`, `--resolve-approval`, sandbox/policy options)
-- [ ] Hardened container-grade isolation by default across environments (full Sigstore/cosign provenance, mandatory profiles everywhere, centralized signed/PKI policy distribution, non-Docker/containerd parity)
+- [x] Optional Docker sandbox smoke workflow for required/container path (not full parity proof)
+- [ ] Hardened container-grade isolation by default across environments (native Sigstore/cosign chain, mandatory profiles everywhere, centralized signed/PKI policy distribution, non-Docker/containerd parity)
 - [ ] Broader mutating tool set with per-tool risk classes and human approval workflow
 
-## M5 — Learning and metacognition
+## M5 â€” Learning and metacognition
 - [x] Outcome recording and evaluation (`SQLiteOutcomeStore`, CLI record/summary)
 - [x] Capability and error tracking baseline (`learning.metacognition.capability_report`)
 - [x] Performance metrics summary (deterministic, from recorded outcomes)
 - [x] Regression detection baseline (`detect_regressions`, CLI `--outcomes-regressions`, API includes regression signal)
+- [x] Baseline vs candidate comparison (`compare_baseline_candidate`, CLI `--compare-outcomes`), deterministic report, no automatic action
 - [ ] Strategy/behavior updates based on evidence (no auto-modification of code/prompt/policy without audit/approval)
-- [ ] Baseline/candidate comparison workflows
+- [ ] Candidate evaluation workflow with isolated execution and audited evidence bundle
 
-## M6 — Controlled evolution
+## M6 â€” Controlled evolution
 - [x] Environment promotion/rollback records (`lab/validation/production`, SQLite promotion store, CLI)
-- [x] Promotion guardrail: production `promoted` requires `metadata.human_approval=true` (no autonomous promotion)
+- [x] Promotion guardrail: workflow `proposed->approved->promoted/rolled_back`; production approved/promoted requires `metadata.human_approval=true` + `evaluation_gate.passed=true` evidence (no autonomous promotion)
 - [ ] Isolated candidate workspaces and execution isolation for experiments
 - [ ] Baseline benchmarks, candidate comparison, automated rollback triggers (audit-only/approved)
 - [ ] Human approval for promotion and high-impact changes (policy-enforced end-to-end)
 
-## M7 — Interfaces and observability
+## M7 â€” Interfaces and observability
 - [x] Authenticated read-only API baseline (`digitalbrain.api.server`, token env, no mutation endpoints)
-- [x] Versioned read-only endpoints (`/v1/*`) exposing real configured stores
+- [x] Versioned read-only endpoints (`/v1/*`) exposing real configured stores; minimal scope RBAC via `DIGITALBRAIN_API_SCOPES`
 - [ ] Dashboard reflecting real system state
 - [ ] 3D architecture visualization backed by live data
 - [ ] Desktop/mobile client access
