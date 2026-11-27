@@ -329,6 +329,33 @@ class TestExecution(unittest.TestCase):
             self.assertFalse(res.ok)
             self.assertIn("digest", (res.error or "").lower())
 
+    def test_container_manifest_audited(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "a.txt").write_text("ok", encoding="utf-8")
+            audit_db = root / "audit.db"
+            with AuditLog(audit_db) as audit:
+                ex = ToolExecutor(workspace_root=root, sandbox_mode="container", audit_log=audit, container_seccomp="default.json")
+                fake_proc = mock.Mock()
+                fake_proc.returncode = 0
+                fake_proc.communicate.return_value = None
+
+                def fake_popen(cmd, **kwargs):
+                    stdout_f = kwargs["stdout"]
+                    stdout_f.write(b'{"ok": true, "output": {"content":"ok"}}')
+                    stdout_f.flush()
+                    return fake_proc
+
+                with mock.patch("digitalbrain.execution.executor.shutil.which", return_value="/usr/bin/docker"), \
+                     mock.patch("digitalbrain.execution.executor.subprocess.run", return_value=mock.Mock(returncode=0)), \
+                     mock.patch("digitalbrain.execution.executor.subprocess.Popen", side_effect=fake_popen):
+                    res = ex.execute("read_file", {"path": "a.txt"})
+                self.assertTrue(res.ok)
+                events = audit.list_events(limit=50)
+            manifest = [e for e in events if e.event_type == "tool.sandbox_manifest"]
+            self.assertTrue(manifest)
+            self.assertEqual(manifest[0].details.get("seccomp"), "default.json")
+
 
 if __name__ == "__main__":
     unittest.main()
