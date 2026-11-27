@@ -254,6 +254,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--outcomes-summary", action="store_true", help="Show outcome summary from --outcomes-db.")
     parser.add_argument("--outcomes-regressions", action="store_true", help="Detect deterministic outcome regressions from --outcomes-db.")
     parser.add_argument("--compare-outcomes", nargs=3, metavar=("KIND", "BASELINE_REF", "CANDIDATE_REF"), help="Deterministic baseline vs candidate outcome comparison.")
+    parser.add_argument("--evaluate-promotion-gate", nargs=3, metavar=("KIND", "BASELINE_REF", "CANDIDATE_REF"), help="Deterministic promotion evaluation gate evidence (no promotion action).")
     parser.add_argument("--promotion-db", help="SQLite file for environment promotion records (M6 baseline).")
     parser.add_argument("--record-promotion", nargs=5, metavar=("ARTIFACT", "FROM", "TO", "STATUS", "REASON"), help="Record promotion/rollback event.")
     parser.add_argument("--promotion-metadata", default="{}", help="JSON metadata for --record-promotion (e.g. human_approval/evaluation_gate).")
@@ -349,7 +350,7 @@ def main(argv: list[str] | None = None) -> int:
     plan_actions = [args.list_plans, bool(args.get_plan and not args.list_approvals), bool(args.replan), bool(args.set_plan_lifecycle), bool(args.record_step_outcome), bool(args.approve_plan_execution), args.list_approvals, bool(args.resolve_approval)]
     audit_actions = [args.list_audit]
     execution_actions = [args.list_tools, bool(args.run_tool)]
-    outcome_actions = [bool(args.record_outcome), bool(args.outcomes_summary), bool(args.outcomes_regressions), bool(args.compare_outcomes)]
+    outcome_actions = [bool(args.record_outcome), bool(args.outcomes_summary), bool(args.outcomes_regressions), bool(args.compare_outcomes), bool(args.evaluate_promotion_gate)]
     promotion_actions = [bool(args.record_promotion), bool(args.list_promotions)]
     policy_actions = [bool(args.validate_sandbox_policy)]
     api_actions = [bool(args.serve_api)]
@@ -365,7 +366,7 @@ def main(argv: list[str] | None = None) -> int:
     if sum(1 for a in execution_actions if a) > 1:
         parser.error("Use only one of --list-tools or --run-tool")
     if sum(1 for a in outcome_actions if a) > 1:
-        parser.error("Use only one outcome action: --record-outcome, --outcomes-summary, --outcomes-regressions, or --compare-outcomes")
+        parser.error("Use only one outcome action: --record-outcome, --outcomes-summary, --outcomes-regressions, --compare-outcomes, or --evaluate-promotion-gate")
     if sum(1 for a in promotion_actions if a) > 1:
         parser.error("Use only one of --record-promotion or --list-promotions")
     if args.run_tool and args.tool_plan_id and not args.plan_db:
@@ -441,6 +442,16 @@ def main(argv: list[str] | None = None) -> int:
             report = store.compare_baseline_candidate(kind=kind, baseline_ref=base_ref, candidate_ref=cand_ref)
         for k, v in report.items():
             print(f"{k}: {v}")
+        return 0
+
+    if args.evaluate_promotion_gate:
+        if not args.outcomes_db:
+            parser.error("--evaluate-promotion-gate requires --outcomes-db")
+        kind, base_ref, cand_ref = args.evaluate_promotion_gate
+        from digitalbrain.learning import SQLiteOutcomeStore, evaluate_promotion_gate
+        with SQLiteOutcomeStore(args.outcomes_db) as store:
+            report = evaluate_promotion_gate(store, kind=kind, baseline_ref=base_ref, candidate_ref=cand_ref)
+        print(json.dumps(report, ensure_ascii=False))
         return 0
 
     if args.record_promotion:
