@@ -162,7 +162,7 @@ def default_tools(root: Path) -> dict[str, ToolSpec]:
             read_only=True,
             risk_class="none",
             timeout_s=5.0,
-            limits={"limit_max": 500},
+            limits={"limit_max": 500, "max_output_bytes": 262144},
             handler=lambda **kw: tool_list_dir(root, **kw),
         ),
         "read_file": ToolSpec(
@@ -171,7 +171,7 @@ def default_tools(root: Path) -> dict[str, ToolSpec]:
             read_only=True,
             risk_class="none",
             timeout_s=5.0,
-            limits={"max_chars_max": 200_000},
+            limits={"max_chars_max": 200_000, "max_output_bytes": 262144},
             handler=lambda **kw: tool_read_file(root, **kw),
         ),
         "grep": ToolSpec(
@@ -180,7 +180,7 @@ def default_tools(root: Path) -> dict[str, ToolSpec]:
             read_only=True,
             risk_class="none",
             timeout_s=10.0,
-            limits={"limit_max": 500, "max_files_max": 2000},
+            limits={"limit_max": 500, "max_files_max": 2000, "max_output_bytes": 262144},
             handler=lambda **kw: tool_grep(root, **kw),
         ),
         "write_file": ToolSpec(
@@ -189,7 +189,7 @@ def default_tools(root: Path) -> dict[str, ToolSpec]:
             read_only=False,
             risk_class="low",
             timeout_s=5.0,
-            limits={"max_chars_max": 500_000},
+            limits={"max_chars_max": 500_000, "max_output_bytes": 65536},
             handler=lambda **kw: tool_write_file(root, **kw),
         ),
         "mkdir": ToolSpec(
@@ -198,7 +198,7 @@ def default_tools(root: Path) -> dict[str, ToolSpec]:
             read_only=False,
             risk_class="low",
             timeout_s=5.0,
-            limits={},
+            limits={"max_output_bytes": 65536},
             handler=lambda **kw: tool_mkdir(root, **kw),
         ),
     }

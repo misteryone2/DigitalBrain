@@ -230,7 +230,8 @@ class ToolExecutor:
             "TEMP": os.environ.get("TEMP", ""),
             "TMP": os.environ.get("TMP", ""),
         }
-        with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as stdout_f, tempfile.TemporaryFile(mode="w+", encoding="utf-8") as stderr_f:
+        max_output_bytes = int(spec.limits.get("max_output_bytes", 262144))
+        with tempfile.TemporaryFile(mode="w+b") as stdout_f, tempfile.TemporaryFile(mode="w+b") as stderr_f:
             cmd = [sys.executable, "-I", "-m", "digitalbrain.execution.worker"]
             creationflags = 0
             start_new_session = False
@@ -243,22 +244,27 @@ class ToolExecutor:
                 stdin=subprocess.PIPE,
                 stdout=stdout_f,
                 stderr=stderr_f,
-                text=True,
+                text=False,
                 cwd=str(self.workspace_root),
                 env=env,
                 creationflags=creationflags,
                 start_new_session=start_new_session,
             )
             try:
-                proc.communicate(input=json.dumps(payload), timeout=max(0.1, float(spec.timeout_s)))
+                proc.communicate(input=json.dumps(payload).encode("utf-8"), timeout=max(0.1, float(spec.timeout_s)))
             except subprocess.TimeoutExpired as exc:
                 self._kill_process_tree(proc)
                 raise TimeoutError(f"Tool '{spec.name}' timed out after {spec.timeout_s}s.") from exc
 
             stdout_f.seek(0)
             stderr_f.seek(0)
-            stdout = stdout_f.read().strip()
-            stderr = stderr_f.read().strip()
+            stdout_bytes = stdout_f.read(max_output_bytes + 1)
+            stderr_bytes = stderr_f.read(65536)
+
+        if len(stdout_bytes) > max_output_bytes:
+            raise RuntimeError(f"Tool '{spec.name}' output exceeded {max_output_bytes} bytes.")
+        stdout = stdout_bytes.decode("utf-8", errors="replace").strip()
+        stderr = stderr_bytes.decode("utf-8", errors="replace").strip()
 
         if not stdout:
             raise RuntimeError(f"Tool worker produced no output. rc={proc.returncode} stderr={stderr[:500]}")
