@@ -17,6 +17,7 @@ from typing import Any
 from digitalbrain.core.audit import AuditLog
 from digitalbrain.execution import winjob
 from digitalbrain.execution.policy import ExecutionPolicy
+from digitalbrain.execution.sandbox_policy import SandboxPolicyConfig
 from digitalbrain.execution.tools import ToolSpec, default_tools
 
 
@@ -57,18 +58,21 @@ class ToolExecutor:
         container_apparmor: str | None = None,
         require_image_digest: bool = False,
         host_job_limits: bool = True,
+        sandbox_policy: SandboxPolicyConfig | None = None,
     ) -> None:
         self.workspace_root = Path(workspace_root).resolve()
         self.tools = tools or default_tools(self.workspace_root)
         self.policy = policy or ExecutionPolicy(allowed_tools=set(self.tools.keys()))
         self.audit = audit_log
         self.isolated = isolated
-        self.sandbox_mode = sandbox_mode
-        self.container_image = container_image
-        self.container_seccomp = container_seccomp
-        self.container_apparmor = container_apparmor
-        self.require_image_digest = require_image_digest
-        self.host_job_limits = host_job_limits
+        self.sandbox_policy = sandbox_policy or SandboxPolicyConfig.from_env_and_file()
+        self.sandbox_mode = sandbox_mode or self.sandbox_policy.mode
+        self.container_image = container_image or self.sandbox_policy.container_image
+        self.container_seccomp = container_seccomp if container_seccomp is not None else self.sandbox_policy.container_seccomp
+        self.container_apparmor = container_apparmor if container_apparmor is not None else self.sandbox_policy.container_apparmor
+        self.require_image_digest = bool(require_image_digest or self.sandbox_policy.require_image_digest)
+        self.host_job_limits = bool(host_job_limits and self.sandbox_policy.host_job_limits)
+        self.require_container_for_mutating = bool(self.sandbox_policy.require_container_for_mutating)
 
     def list_tools(self) -> list[dict[str, Any]]:
         return [
@@ -125,6 +129,7 @@ class ToolExecutor:
             approval=approval,
             tool_risk_class=spec.risk_class,
             sandbox_mode=sandbox_mode,
+            require_container_for_mutating=self.require_container_for_mutating,
         )
         if not decision.allowed:
             self._audit("tool.denied", "denied", {"tool": tool_name, "reason": decision.reason, "arguments": args})
@@ -392,6 +397,9 @@ class ToolExecutor:
             "apparmor": self.container_apparmor,
             "workspace_mount": f"{self.workspace_root}:/workspace:rw",
             "src_mount": f"{src_path}:/opt/digitalbrain-src:ro",
+            "policy_source": self.sandbox_policy.policy_source,
+            "require_image_digest": self.require_image_digest,
+            "allowed_image_digests": list(self.sandbox_policy.allowed_image_digests),
         }
         self._audit("tool.sandbox_manifest", "configured", {"tool": spec.name, **manifest})
 
@@ -420,6 +428,13 @@ class ToolExecutor:
             raise ValueError("Container image must not be empty.")
         if self.require_image_digest and "@sha256:" not in img:
             raise ValueError("Container image must be pinned by digest when require_image_digest is enabled.")
+        allowed = tuple(self.sandbox_policy.allowed_image_digests or ())
+        if allowed and img not in allowed:
+            raise ValueError("Container image is not in allowed image digest allowlist.")
+        if self.sandbox_policy.require_seccomp and not self.container_seccomp:
+            raise ValueError("Seccomp profile required by sandbox policy.")
+        if self.sandbox_policy.require_apparmor and not self.container_apparmor:
+            raise ValueError("AppArmor profile required by sandbox policy.")
 
     @staticmethod
     def _parse_worker_output(spec: ToolSpec, stdout_bytes: bytes, stderr_bytes: bytes, returncode: int, max_output_bytes: int) -> dict[str, Any]:

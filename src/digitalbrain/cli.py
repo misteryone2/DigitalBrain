@@ -9,7 +9,7 @@ from pathlib import Path
 
 from digitalbrain.core.audit import AuditLog
 from digitalbrain.core.brain import DigitalBrain
-from digitalbrain.execution import ExecutionPolicy, ToolExecutor
+from digitalbrain.execution import ExecutionPolicy, SandboxPolicyConfig, ToolExecutor
 from digitalbrain.knowledge import SQLiteKnowledgeStore
 from digitalbrain.memory import MemoryType, SQLiteMemoryStore
 from digitalbrain.planning import SQLitePlanStore
@@ -235,6 +235,10 @@ def build_parser() -> argparse.ArgumentParser:
         action=argparse.BooleanOptionalAction,
         default=os.environ.get("DIGITALBRAIN_HOST_JOB_LIMITS", "1").lower() in {"1", "true", "yes", "on"},
         help="Apply Windows Job Object limits to host subprocess sandbox (default: enabled). Env: DIGITALBRAIN_HOST_JOB_LIMITS.",
+    )
+    parser.add_argument(
+        "--sandbox-policy-file",
+        help="Path to signed/central sandbox policy JSON. Env: DIGITALBRAIN_SANDBOX_POLICY_FILE.",
     )
     parser.add_argument(
         "--list-approvals",
@@ -574,6 +578,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
     if args.list_tools or args.run_tool:
+        if args.sandbox_policy_file:
+            os.environ["DIGITALBRAIN_SANDBOX_POLICY_FILE"] = args.sandbox_policy_file
+        sandbox_policy = SandboxPolicyConfig.from_env_and_file()
         audit = AuditLog(args.audit_db) if args.audit_db else None
         try:
             tools = None
@@ -587,6 +594,7 @@ def main(argv: list[str] | None = None) -> int:
                     container_apparmor=args.container_apparmor,
                     require_image_digest=bool(args.require_image_digest),
                     host_job_limits=bool(args.host_job_limits),
+                    sandbox_policy=sandbox_policy,
                 )
                 for spec in executor.list_tools():
                     ro = "read-only" if spec["read_only"] else "mutating"
@@ -635,6 +643,7 @@ def main(argv: list[str] | None = None) -> int:
                 container_apparmor=args.container_apparmor,
                 require_image_digest=bool(args.require_image_digest),
                 host_job_limits=bool(args.host_job_limits),
+                sandbox_policy=sandbox_policy,
             )
 
             result = executor.execute(args.run_tool, tool_args, execution_gate=gate, approval=approval)
