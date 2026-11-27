@@ -251,7 +251,7 @@ class CLITests(unittest.TestCase):
             self.assertEqual(code, 1)
             self.assertIn("mutating", out.getvalue().lower())
 
-            # Approve then run
+            # Approve then run in host mode should be denied by sandbox policy
             with redirect_stdout(io.StringIO()):
                 code = main(["--plan-db", str(plan_db), "--approve-plan-execution", plan.id, "--reason", "ok", "--approve-tool", "write_file", "--approve-risk-class", "low", "--approve-expires-at", "2099-01-01T00:00:00Z"])
             self.assertEqual(code, 0)
@@ -260,11 +260,11 @@ class CLITests(unittest.TestCase):
             with redirect_stdout(out):
                 code = main([
                     "--workspace", str(root), "--plan-db", str(plan_db), "--tool-plan-id", plan.id,
-                    "--allow-mutating-tools",
+                    "--allow-mutating-tools", "--sandbox-mode", "host",
                     "--run-tool", "write_file", "--tool-args", json.dumps({"path": "a.txt", "content": "hi", "overwrite": True})
                 ])
-            self.assertEqual(code, 0)
-            self.assertTrue((root / "a.txt").exists())
+            self.assertEqual(code, 1)
+            self.assertIn("container sandbox required", out.getvalue().lower())
 
     def test_approval_listing_and_admin_resolve(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

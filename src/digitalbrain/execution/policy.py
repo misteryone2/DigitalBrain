@@ -47,6 +47,7 @@ class ExecutionPolicy:
         execution_gate: dict[str, Any] | None = None,
         approval: dict[str, Any] | None = None,
         tool_risk_class: str | None = None,
+        sandbox_mode: str | None = None,
     ) -> PolicyDecision:
         if tool_name not in self.allowed_tools:
             return PolicyDecision(False, f"Tool '{tool_name}' is not in allowlist.")
@@ -63,6 +64,8 @@ class ExecutionPolicy:
 
         if not self.allow_mutating:
             return PolicyDecision(False, f"Tool '{tool_name}' is mutating; mutating tools are disabled.")
+        if sandbox_mode != "container":
+            return PolicyDecision(False, f"Tool '{tool_name}' is mutating; container sandbox required (mode={sandbox_mode or 'unknown'}).")
         if gate_status != "ready":
             return PolicyDecision(False, f"Tool '{tool_name}' is mutating; execution gate is {gate_status}.")
         if not approved:

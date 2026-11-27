@@ -90,7 +90,7 @@ class TestExecution(unittest.TestCase):
             root = Path(tmp)
             all_tools = default_tools(root)
             policy = ExecutionPolicy(allowed_tools=set(all_tools.keys()), allow_mutating=True)
-            ex = ToolExecutor(workspace_root=root, policy=policy, tools=all_tools)
+            ex = ToolExecutor(workspace_root=root, policy=policy, tools=all_tools, sandbox_mode="host")
 
             denied_gate = ex.execute(
                 "write_file",
@@ -119,23 +119,24 @@ class TestExecution(unittest.TestCase):
             self.assertFalse(denied_scope.ok)
             self.assertIn("scoped", denied_scope.policy_reason.lower())
 
-            # No plan-db approval context: mutating execution should be denied at reserve stage.
-            denied_noctx = ex.execute(
+            # Mutating tools require container sandbox
+            denied_sandbox = ex.execute(
                 "write_file",
                 {"path": "x.txt", "content": "hi", "overwrite": True},
                 execution_gate={"status": "ready"},
                 approval={"approved": True, "tool_name": "write_file", "risk_class": "low"},
             )
-            self.assertFalse(denied_noctx.allowed)
-            self.assertIn("reserve", denied_noctx.policy_reason.lower())
+            self.assertFalse(denied_sandbox.allowed)
+            self.assertIn("container sandbox required", denied_sandbox.policy_reason.lower())
 
     def test_mutating_tool_denied_on_risk_mismatch_or_consumed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             all_tools = default_tools(root)
             policy = ExecutionPolicy(allowed_tools=set(all_tools.keys()), allow_mutating=True)
-            ex = ToolExecutor(workspace_root=root, policy=policy, tools=all_tools)
-            denied_risk = ex.execute(
+            ex = ToolExecutor(workspace_root=root, policy=policy, tools=all_tools, sandbox_mode="container")
+            with mock.patch("digitalbrain.execution.executor.ToolExecutor._docker_available", return_value=True):
+                denied_risk = ex.execute(
                 "write_file",
                 {"path": "x.txt", "content": "hi", "overwrite": True},
                 execution_gate={"status": "ready"},
@@ -144,23 +145,23 @@ class TestExecution(unittest.TestCase):
             self.assertFalse(denied_risk.ok)
             self.assertIn("risk class", denied_risk.policy_reason.lower())
 
-            denied_consumed = ex.execute(
-                "write_file",
-                {"path": "y.txt", "content": "hi", "overwrite": True},
-                execution_gate={"status": "ready"},
-                approval={"approved": True, "tool_name": "write_file", "risk_class": "low", "consumed_at": "2026-01-01T00:00:00Z"},
-            )
-            self.assertFalse(denied_consumed.ok)
-            self.assertIn("consumed", denied_consumed.policy_reason.lower())
+                denied_consumed = ex.execute(
+                    "write_file",
+                    {"path": "y.txt", "content": "hi", "overwrite": True},
+                    execution_gate={"status": "ready"},
+                    approval={"approved": True, "tool_name": "write_file", "risk_class": "low", "consumed_at": "2026-01-01T00:00:00Z"},
+                )
+                self.assertFalse(denied_consumed.ok)
+                self.assertIn("consumed", denied_consumed.policy_reason.lower())
 
-            denied_expired = ex.execute(
-                "write_file",
-                {"path": "z.txt", "content": "hi", "overwrite": True},
-                execution_gate={"status": "ready"},
-                approval={"approved": True, "tool_name": "write_file", "risk_class": "low", "expires_at": "2000-01-01T00:00:00+00:00"},
-            )
-            self.assertFalse(denied_expired.ok)
-            self.assertIn("expired", denied_expired.policy_reason.lower())
+                denied_expired = ex.execute(
+                    "write_file",
+                    {"path": "z.txt", "content": "hi", "overwrite": True},
+                    execution_gate={"status": "ready"},
+                    approval={"approved": True, "tool_name": "write_file", "risk_class": "low", "expires_at": "2000-01-01T00:00:00+00:00"},
+                )
+                self.assertFalse(denied_expired.ok)
+                self.assertIn("expired", denied_expired.policy_reason.lower())
 
     def test_mutating_tool_reserves_and_finalizes_approval(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -182,27 +183,42 @@ class TestExecution(unittest.TestCase):
 
             all_tools = default_tools(root)
             policy = ExecutionPolicy(allowed_tools=set(all_tools.keys()), allow_mutating=True)
-            ex = ToolExecutor(workspace_root=root, policy=policy, tools=all_tools, isolated=True)
-            ok = ex.execute(
-                "write_file",
-                {"path": "x.txt", "content": "hi", "overwrite": True},
-                execution_gate={"status": "ready"},
-                approval=approval,
-            )
-            self.assertTrue(ok.ok)
-            with SQLitePlanStore(plan_db) as store:
-                rec = store.get(plan.id)
-                assert rec is not None
-                self.assertEqual(rec.metadata["execution_approval"]["execution_state"], "executed")
+            ex = ToolExecutor(workspace_root=root, policy=policy, tools=all_tools, isolated=True, sandbox_mode="container")
+            fake_proc = mock.Mock()
+            fake_proc.returncode = 0
+            fake_proc.communicate.return_value = None
 
-            # Single-use: second execution denied
-            ok2 = ex.execute(
-                "write_file",
-                {"path": "y.txt", "content": "hi", "overwrite": True},
-                execution_gate={"status": "ready"},
-                approval=approval,
-            )
-            self.assertFalse(ok2.ok)
+            def fake_popen(cmd, **kwargs):
+                # Simulate container worker success and perform local write to reflect side effect in this unit test.
+                Path(root / "x.txt").write_text("hi", encoding="utf-8")
+                stdout_f = kwargs["stdout"]
+                stdout_f.write(b'{"ok": true, "output": {"path":"x.txt","chars":2}}')
+                stdout_f.flush()
+                return fake_proc
+
+            with mock.patch("digitalbrain.execution.executor.shutil.which", return_value="/usr/bin/docker"), \
+                 mock.patch("digitalbrain.execution.executor.subprocess.run", return_value=mock.Mock(returncode=0)), \
+                 mock.patch("digitalbrain.execution.executor.subprocess.Popen", side_effect=fake_popen):
+                ok = ex.execute(
+                    "write_file",
+                    {"path": "x.txt", "content": "hi", "overwrite": True},
+                    execution_gate={"status": "ready"},
+                    approval=approval,
+                )
+                self.assertTrue(ok.ok)
+                with SQLitePlanStore(plan_db) as store:
+                    rec = store.get(plan.id)
+                    assert rec is not None
+                    self.assertEqual(rec.metadata["execution_approval"]["execution_state"], "executed")
+
+                # Single-use: second execution denied
+                ok2 = ex.execute(
+                    "write_file",
+                    {"path": "y.txt", "content": "hi", "overwrite": True},
+                    execution_gate={"status": "ready"},
+                    approval=approval,
+                )
+                self.assertFalse(ok2.ok)
 
     def test_mkdir_mutating_tool_with_approval(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -223,8 +239,22 @@ class TestExecution(unittest.TestCase):
 
             all_tools = default_tools(root)
             policy = ExecutionPolicy(allowed_tools=set(all_tools.keys()), allow_mutating=True)
-            ex = ToolExecutor(workspace_root=root, policy=policy, tools=all_tools, isolated=True)
-            res = ex.execute("mkdir", {"path": "newdir"}, execution_gate={"status": "ready"}, approval=approval)
+            ex = ToolExecutor(workspace_root=root, policy=policy, tools=all_tools, isolated=True, sandbox_mode="container")
+            fake_proc = mock.Mock()
+            fake_proc.returncode = 0
+            fake_proc.communicate.return_value = None
+
+            def fake_popen(cmd, **kwargs):
+                (root / "newdir").mkdir(exist_ok=True)
+                stdout_f = kwargs["stdout"]
+                stdout_f.write(b'{"ok": true, "output": {"path":"newdir","created":true}}')
+                stdout_f.flush()
+                return fake_proc
+
+            with mock.patch("digitalbrain.execution.executor.shutil.which", return_value="/usr/bin/docker"), \
+                 mock.patch("digitalbrain.execution.executor.subprocess.run", return_value=mock.Mock(returncode=0)), \
+                 mock.patch("digitalbrain.execution.executor.subprocess.Popen", side_effect=fake_popen):
+                res = ex.execute("mkdir", {"path": "newdir"}, execution_gate={"status": "ready"}, approval=approval)
             self.assertTrue(res.ok)
             self.assertTrue((root / "newdir").is_dir())
 

@@ -85,6 +85,14 @@ class ToolExecutor:
     ) -> ToolExecutionResult:
         args = dict(arguments or {})
         spec = self.tools.get(tool_name)
+        sandbox_mode = "unknown"
+        if spec is not None and self.isolated and spec.name in set(default_tools(self.workspace_root).keys()):
+            try:
+                sandbox_mode = self._resolve_sandbox_mode()
+            except Exception:
+                sandbox_mode = "unavailable"
+        elif spec is not None:
+            sandbox_mode = "in_process"
         self._audit(
             "tool.requested",
             "requested",
@@ -94,6 +102,7 @@ class ToolExecutor:
                 "execution_gate": execution_gate,
                 "approved": bool((approval or {}).get("approved", False)),
                 "risk_class": getattr(spec, "risk_class", None),
+                "sandbox_mode": sandbox_mode,
             },
         )
         if spec is None:
@@ -106,12 +115,12 @@ class ToolExecutor:
             execution_gate=execution_gate,
             approval=approval,
             tool_risk_class=spec.risk_class,
+            sandbox_mode=sandbox_mode,
         )
         if not decision.allowed:
             self._audit("tool.denied", "denied", {"tool": tool_name, "reason": decision.reason, "arguments": args})
             return ToolExecutionResult(tool_name, False, False, None, decision.reason, decision.reason)
 
-        sandbox_mode = self._resolve_sandbox_mode() if (self.isolated and spec.name in set(default_tools(self.workspace_root).keys())) else "in_process"
         self._audit("tool.allowed", "allowed", {"tool": tool_name, "reason": decision.reason, "risk_class": spec.risk_class, "sandbox_mode": sandbox_mode})
 
         reserved = False
