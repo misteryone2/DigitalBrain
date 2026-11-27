@@ -14,6 +14,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from digitalbrain.core.audit import AuditLog
+from digitalbrain.evolution import SQLitePromotionStore
 from digitalbrain.learning import SQLiteOutcomeStore
 from digitalbrain.memory import SQLiteMemoryStore
 from digitalbrain.planning import SQLitePlanStore
@@ -26,6 +27,7 @@ class ApiConfig:
         self.plan_db = os.environ.get("DIGITALBRAIN_PLAN_DB")
         self.audit_db = os.environ.get("DIGITALBRAIN_AUDIT_DB")
         self.outcomes_db = os.environ.get("DIGITALBRAIN_OUTCOMES_DB")
+        self.promotion_db = os.environ.get("DIGITALBRAIN_PROMOTION_DB")
 
 
 def _json(handler: BaseHTTPRequestHandler, status: int, payload: dict) -> None:
@@ -47,11 +49,13 @@ class Handler(BaseHTTPRequestHandler):
         return
 
     def _auth_ok(self) -> bool:
+        import hmac
+
         token = self.config.token
         if not token:
             return False
         auth = self.headers.get("Authorization", "")
-        return auth == f"Bearer {token}"
+        return hmac.compare_digest(auth, f"Bearer {token}")
 
     def do_OPTIONS(self) -> None:  # noqa: N802
         _json(self, HTTPStatus.NO_CONTENT, {})
@@ -100,6 +104,14 @@ class Handler(BaseHTTPRequestHandler):
                     summary = store.summary()
                     regression = store.detect_regressions()
                 _json(self, 200, {"outcomes": rows, "summary": summary, "regression": regression, "version": "v1"})
+                return
+            if parsed.path in {"/promotions", "/v1/promotions"}:
+                if not self.config.promotion_db:
+                    _json(self, 400, {"error": "DIGITALBRAIN_PROMOTION_DB not configured"})
+                    return
+                with SQLitePromotionStore(self.config.promotion_db) as store:
+                    rows = [r.__dict__ for r in store.list(limit=limit)]
+                _json(self, 200, {"promotions": rows, "version": "v1"})
                 return
             _json(self, 404, {"error": "not found"})
         except Exception as exc:  # noqa: BLE001
