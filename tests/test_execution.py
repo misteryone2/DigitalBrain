@@ -313,6 +313,22 @@ class TestExecution(unittest.TestCase):
             self.assertFalse(res.ok)
             self.assertIn("docker", (res.error or "").lower())
 
+    def test_required_mode_requires_docker(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            ex = ToolExecutor(workspace_root=tmp, sandbox_mode="required")
+            with mock.patch("digitalbrain.execution.executor.shutil.which", return_value=None):
+                res = ex.execute("list_dir", {"path": "."})
+            self.assertFalse(res.ok)
+            self.assertIn("docker", (res.error or "").lower())
+
+    def test_container_image_digest_requirement(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            ex = ToolExecutor(workspace_root=tmp, sandbox_mode="container", container_image="python:3.12-slim", require_image_digest=True)
+            with mock.patch("digitalbrain.execution.executor.ToolExecutor._docker_available", return_value=True):
+                res = ex.execute("list_dir", {"path": "."})
+            self.assertFalse(res.ok)
+            self.assertIn("digest", (res.error or "").lower())
+
 
 if __name__ == "__main__":
     unittest.main()
