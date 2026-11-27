@@ -1,0 +1,117 @@
+﻿"""Outcome and performance metrics persistence (M5 baseline)."""
+
+from __future__ import annotations
+
+import json
+import sqlite3
+import uuid
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+
+@dataclass(frozen=True, slots=True)
+class OutcomeRecord:
+    id: str
+    created_at: str
+    kind: str
+    ref_id: str
+    status: str
+    metrics: dict[str, Any]
+    details: dict[str, Any]
+
+
+class SQLiteOutcomeStore:
+    SCHEMA_VERSION = 1
+
+    def __init__(self, path: str | Path) -> None:
+        self.path = Path(path)
+        if self.path.parent and str(self.path.parent) != ".":
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._conn = sqlite3.connect(self.path)
+        self._conn.row_factory = sqlite3.Row
+        self._init()
+
+    def close(self) -> None:
+        self._conn.close()
+
+    def __enter__(self) -> "SQLiteOutcomeStore":
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        self.close()
+
+    def _init(self) -> None:
+        self._conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS outcomes (
+                id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                ref_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                metrics_json TEXT NOT NULL,
+                details_json TEXT NOT NULL
+            )
+            """
+        )
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_outcomes_kind_created ON outcomes(kind, created_at DESC)")
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_outcomes_ref ON outcomes(ref_id, created_at DESC)")
+        cur = self._conn.execute("PRAGMA user_version").fetchone()[0]
+        if cur == 0:
+            self._conn.execute(f"PRAGMA user_version = {self.SCHEMA_VERSION}")
+        elif cur != self.SCHEMA_VERSION:
+            raise RuntimeError(f"Unsupported outcomes schema version {cur}")
+        self._conn.commit()
+
+    def record_outcome(self, *, kind: str, ref_id: str, status: str, metrics: dict[str, Any] | None = None, details: dict[str, Any] | None = None) -> OutcomeRecord:
+        rec = OutcomeRecord(
+            id=uuid.uuid4().hex,
+            created_at=datetime.now(timezone.utc).isoformat(),
+            kind=kind.strip(),
+            ref_id=ref_id.strip(),
+            status=status.strip(),
+            metrics=metrics or {},
+            details=details or {},
+        )
+        if not rec.kind or not rec.ref_id or not rec.status:
+            raise ValueError("kind, ref_id, status required")
+        with self._conn:
+            self._conn.execute(
+                "INSERT INTO outcomes(id,created_at,kind,ref_id,status,metrics_json,details_json) VALUES (?,?,?,?,?,?,?)",
+                (rec.id, rec.created_at, rec.kind, rec.ref_id, rec.status, json.dumps(rec.metrics, sort_keys=True), json.dumps(rec.details, sort_keys=True)),
+            )
+        return rec
+
+    def list_outcomes(self, *, kind: str | None = None, ref_id: str | None = None, limit: int = 100) -> list[OutcomeRecord]:
+        q = "SELECT * FROM outcomes WHERE 1=1"
+        params: list[Any] = []
+        if kind:
+            q += " AND kind=?"
+            params.append(kind)
+        if ref_id:
+            q += " AND ref_id=?"
+            params.append(ref_id)
+        q += " ORDER BY created_at DESC, rowid DESC LIMIT ?"
+        params.append(limit)
+        rows = self._conn.execute(q, params).fetchall()
+        return [self._row(r) for r in rows]
+
+    def summary(self, *, kind: str | None = None) -> dict[str, Any]:
+        rows = self.list_outcomes(kind=kind, limit=1000)
+        total = len(rows)
+        by_status: dict[str, int] = {}
+        for r in rows:
+            by_status[r.status] = by_status.get(r.status, 0) + 1
+        success = by_status.get("passed", 0) + by_status.get("ok", 0) + by_status.get("executed", 0)
+        failure = by_status.get("failed", 0) + by_status.get("error", 0)
+        rate = (success / total) if total else None
+        return {"total": total, "by_status": by_status, "success_rate": rate, "failures": failure}
+
+    @staticmethod
+    def _row(r: sqlite3.Row) -> OutcomeRecord:
+        return OutcomeRecord(
+            id=r["id"], created_at=r["created_at"], kind=r["kind"], ref_id=r["ref_id"], status=r["status"],
+            metrics=json.loads(r["metrics_json"] or "{}"), details=json.loads(r["details_json"] or "{}"),
+        )

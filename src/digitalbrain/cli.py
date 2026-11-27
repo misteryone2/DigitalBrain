@@ -244,6 +244,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--attestation-path",
         help="Path to image attestation JSON. Env: DIGITALBRAIN_ATTESTATION_PATH.",
     )
+    parser.add_argument("--outcomes-db", help="SQLite file for outcome/metrics records (M5 baseline).")
+    parser.add_argument("--record-outcome", nargs=3, metavar=("KIND", "REF_ID", "STATUS"), help="Record an outcome in --outcomes-db.")
+    parser.add_argument("--outcomes-summary", action="store_true", help="Show outcome summary from --outcomes-db.")
+    parser.add_argument("--promotion-db", help="SQLite file for environment promotion records (M6 baseline).")
+    parser.add_argument("--record-promotion", nargs=5, metavar=("ARTIFACT", "FROM", "TO", "STATUS", "REASON"), help="Record promotion/rollback event.")
+    parser.add_argument("--list-promotions", action="store_true", help="List promotion records from --promotion-db.")
+    parser.add_argument("--serve-api", action="store_true", help="Serve read-only authenticated API (M7 baseline).")
+    parser.add_argument("--api-host", default="127.0.0.1", help="API host (default 127.0.0.1).")
+    parser.add_argument("--api-port", type=int, default=8765, help="API port (default 8765).")
     parser.add_argument(
         "--list-approvals",
         action="store_true",
@@ -332,7 +341,10 @@ def main(argv: list[str] | None = None) -> int:
     plan_actions = [args.list_plans, bool(args.get_plan and not args.list_approvals), bool(args.replan), bool(args.set_plan_lifecycle), bool(args.record_step_outcome), bool(args.approve_plan_execution), args.list_approvals, bool(args.resolve_approval)]
     audit_actions = [args.list_audit]
     execution_actions = [args.list_tools, bool(args.run_tool)]
-    groups = [any(memory_actions), any(knowledge_actions), any(plan_actions), any(audit_actions), any(execution_actions)]
+    outcome_actions = [bool(args.record_outcome), bool(args.outcomes_summary)]
+    promotion_actions = [bool(args.record_promotion), bool(args.list_promotions)]
+    api_actions = [bool(args.serve_api)]
+    groups = [any(memory_actions), any(knowledge_actions), any(plan_actions), any(audit_actions), any(execution_actions), any(outcome_actions), any(promotion_actions), any(api_actions)]
     if sum(1 for a in memory_actions if a) > 1:
         parser.error(
             "Use only one of --list-memory, --memory-stats, --get-memory, or --correct-memory"
@@ -343,6 +355,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("Use only one plan action: --list-plans, --get-plan, --replan, --set-plan-lifecycle, --record-step-outcome, --approve-plan-execution, --list-approvals, or --resolve-approval")
     if sum(1 for a in execution_actions if a) > 1:
         parser.error("Use only one of --list-tools or --run-tool")
+    if sum(1 for a in outcome_actions if a) > 1:
+        parser.error("Use only one of --record-outcome or --outcomes-summary")
+    if sum(1 for a in promotion_actions if a) > 1:
+        parser.error("Use only one of --record-promotion or --list-promotions")
     if args.run_tool and args.tool_plan_id and not args.plan_db:
         parser.error("--tool-plan-id requires --plan-db")
     if args.approve_plan_execution and not args.plan_db:
@@ -350,7 +366,68 @@ def main(argv: list[str] | None = None) -> int:
     if (args.list_approvals or args.resolve_approval) and not args.plan_db:
         parser.error("Approval commands require --plan-db")
     if sum(groups) > 1:
-        parser.error("Use memory, knowledge, plan, audit, or execution commands separately")
+        parser.error("Use memory, knowledge, plan, audit, execution, outcome, promotion, or API commands separately")
+
+    if args.record_outcome:
+        if not args.outcomes_db:
+            parser.error("--record-outcome requires --outcomes-db")
+        kind, ref_id, status = args.record_outcome
+        from digitalbrain.learning import SQLiteOutcomeStore
+        with SQLiteOutcomeStore(args.outcomes_db) as store:
+            rec = store.record_outcome(kind=kind, ref_id=ref_id, status=status, details={"source": "cli"})
+        print(f"Outcome: {rec.id} {rec.kind} {rec.status}")
+        return 0
+
+    if args.outcomes_summary:
+        if not args.outcomes_db:
+            parser.error("--outcomes-summary requires --outcomes-db")
+        from digitalbrain.learning import SQLiteOutcomeStore
+        with SQLiteOutcomeStore(args.outcomes_db) as store:
+            summary = store.summary()
+        for k, v in summary.items():
+            print(f"{k}: {v}")
+        return 0
+
+    if args.record_promotion:
+        if not args.promotion_db:
+            parser.error("--record-promotion requires --promotion-db")
+        artifact, from_env, to_env, status, reason = args.record_promotion
+        from digitalbrain.evolution import SQLitePromotionStore
+        try:
+            with SQLitePromotionStore(args.promotion_db) as store:
+                rec = store.record(artifact=artifact, from_env=from_env, to_env=to_env, status=status, reason=reason, metadata={"source": "cli"})
+        except ValueError as exc:
+            print(f"Error: {exc}")
+            return 1
+        print(f"Promotion: {rec.id} {rec.from_env}->{rec.to_env} {rec.status}")
+        return 0
+
+    if args.list_promotions:
+        if not args.promotion_db:
+            parser.error("--list-promotions requires --promotion-db")
+        from digitalbrain.evolution import SQLitePromotionStore
+        with SQLitePromotionStore(args.promotion_db) as store:
+            recs = store.list(limit=args.limit)
+        if not recs:
+            print("No promotion records found.")
+            return 0
+        for r in recs:
+            print(f"[{r.created_at}] {r.id} {r.artifact} {r.from_env}->{r.to_env} {r.status}")
+            if r.reason:
+                print(f"  reason: {r.reason}")
+        return 0
+
+    if args.serve_api:
+        if not os.environ.get("DIGITALBRAIN_API_TOKEN"):
+            print("Error: DIGITALBRAIN_API_TOKEN must be set for --serve-api.")
+            return 1
+        os.environ["DIGITALBRAIN_MEMORY_DB"] = args.memory_db or os.environ.get("DIGITALBRAIN_MEMORY_DB", "")
+        os.environ["DIGITALBRAIN_PLAN_DB"] = args.plan_db or os.environ.get("DIGITALBRAIN_PLAN_DB", "")
+        os.environ["DIGITALBRAIN_AUDIT_DB"] = args.audit_db or os.environ.get("DIGITALBRAIN_AUDIT_DB", "")
+        os.environ["DIGITALBRAIN_OUTCOMES_DB"] = args.outcomes_db or os.environ.get("DIGITALBRAIN_OUTCOMES_DB", "")
+        from digitalbrain.api import serve
+        serve(host=args.api_host, port=args.api_port)
+        return 0
 
     if args.correct_memory:
         if not args.memory_db:
