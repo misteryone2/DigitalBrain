@@ -61,7 +61,7 @@ class Handler(BaseHTTPRequestHandler):
         return hmac.compare_digest(auth, f"Bearer {token}")
 
     def _scope_ok(self, scope: str) -> bool:
-        scopes = self.config.scopes or {"read:*"}
+        scopes = getattr(self.config, "scopes", None) or {"read:*"}
         return "read:*" in scopes or scope in scopes
 
     def do_OPTIONS(self) -> None:  # noqa: N802
