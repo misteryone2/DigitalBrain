@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 from digitalbrain.core.audit import AuditLog
@@ -205,26 +206,29 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--sandbox-mode",
         choices=["host", "container", "auto", "required"],
-        default="host",
-        help="Sandbox mode for tool execution: host (default), container, auto, or required (container or fail).",
+        default=os.environ.get("DIGITALBRAIN_SANDBOX_MODE", "host"),
+        help="Sandbox mode for tool execution: host (default), container, auto, or required. Can be set via DIGITALBRAIN_SANDBOX_MODE.",
     )
     parser.add_argument(
         "--container-image",
-        default="python:3.12-slim",
-        help="Container image for --sandbox-mode container/auto (default: python:3.12-slim).",
+        default=os.environ.get("DIGITALBRAIN_CONTAINER_IMAGE", "python:3.12-slim"),
+        help="Container image for container sandbox modes. Can be set via DIGITALBRAIN_CONTAINER_IMAGE.",
     )
     parser.add_argument(
         "--container-seccomp",
-        help="Optional seccomp profile for container sandbox (Docker --security-opt seccomp=...).",
+        default=os.environ.get("DIGITALBRAIN_CONTAINER_SECCOMP"),
+        help="Optional seccomp profile for container sandbox (Docker --security-opt seccomp=...). Env: DIGITALBRAIN_CONTAINER_SECCOMP.",
     )
     parser.add_argument(
         "--container-apparmor",
-        help="Optional apparmor profile for container sandbox (Docker --security-opt apparmor=...).",
+        default=os.environ.get("DIGITALBRAIN_CONTAINER_APPARMOR"),
+        help="Optional apparmor profile for container sandbox (Docker --security-opt apparmor=...). Env: DIGITALBRAIN_CONTAINER_APPARMOR.",
     )
     parser.add_argument(
         "--require-image-digest",
         action="store_true",
-        help="Require --container-image to include @sha256:... digest.",
+        default=os.environ.get("DIGITALBRAIN_REQUIRE_IMAGE_DIGEST", "").lower() in {"1", "true", "yes"},
+        help="Require --container-image to include @sha256:... digest. Env: DIGITALBRAIN_REQUIRE_IMAGE_DIGEST.",
     )
     parser.add_argument(
         "--list-approvals",
