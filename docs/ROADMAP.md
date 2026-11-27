@@ -47,8 +47,9 @@ This roadmap turns the [founding vision](VISION.md) into incremental, verifiable
 - [x] Execution gate awareness: read-only inspection allowed with `needs_review` reason; mutating requires `ready`
 - [x] Explicit approval model for mutating execution (`plan.execution_approved`, metadata; no auto-execution)
 - [x] Scoped approval metadata (optional tool/risk class) and policy enforcement
+- [x] Single-use approval consumption for successful mutating execution
 - [x] Controlled mutating tool proof: `write_file` registry entry, policy-gated, CLI opt-in + approval + ready gate required
-- [x] In-process sandbox hardening: per-tool timeout, arg/output limits, symlink-path rejection
+- [x] In-process sandbox hardening: per-tool timeout, arg/output limits, symlink-path rejection, risk-class enforcement
 - [x] Audit logs for tool actions/decisions (`tool.requested/allowed/denied/executed/failed`) and approval events
 - [x] CLI tool inspection/execution commands (`--list-tools`, `--run-tool`, `--approve-plan-execution`, `--allow-mutating-tools`)
 - [ ] OS/process-level sandbox isolation and resource quotas

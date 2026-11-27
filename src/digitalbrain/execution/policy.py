@@ -45,6 +45,7 @@ class ExecutionPolicy:
         read_only: bool,
         execution_gate: dict[str, Any] | None = None,
         approval: dict[str, Any] | None = None,
+        tool_risk_class: str | None = None,
     ) -> PolicyDecision:
         if tool_name not in self.allowed_tools:
             return PolicyDecision(False, f"Tool '{tool_name}' is not in allowlist.")
@@ -69,4 +70,13 @@ class ExecutionPolicy:
         approved_tool = (approval or {}).get("tool_name")
         if approved_tool and approved_tool != tool_name:
             return PolicyDecision(False, f"Approval is scoped to tool '{approved_tool}', not '{tool_name}'.")
+
+        approved_risk = (approval or {}).get("risk_class")
+        if approved_risk and tool_risk_class and approved_risk != tool_risk_class:
+            return PolicyDecision(
+                False,
+                f"Approval risk class '{approved_risk}' does not match tool risk '{tool_risk_class}'.",
+            )
+        if (approval or {}).get("consumed_at"):
+            return PolicyDecision(False, "Execution approval has already been consumed.")
         return PolicyDecision(True, "Allowed mutating tool by explicit approval and ready gate.")

@@ -122,10 +122,34 @@ class TestExecution(unittest.TestCase):
                 "write_file",
                 {"path": "x.txt", "content": "hi", "overwrite": True},
                 execution_gate={"status": "ready"},
-                approval={"approved": True, "tool_name": "write_file"},
+                approval={"approved": True, "tool_name": "write_file", "risk_class": "low"},
             )
             self.assertTrue(ok.ok)
             self.assertEqual((root / "x.txt").read_text(encoding="utf-8"), "hi")
+
+    def test_mutating_tool_denied_on_risk_mismatch_or_consumed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            all_tools = default_tools(root)
+            policy = ExecutionPolicy(allowed_tools=set(all_tools.keys()), allow_mutating=True)
+            ex = ToolExecutor(workspace_root=root, policy=policy, tools=all_tools)
+            denied_risk = ex.execute(
+                "write_file",
+                {"path": "x.txt", "content": "hi", "overwrite": True},
+                execution_gate={"status": "ready"},
+                approval={"approved": True, "tool_name": "write_file", "risk_class": "high"},
+            )
+            self.assertFalse(denied_risk.ok)
+            self.assertIn("risk class", denied_risk.policy_reason.lower())
+
+            denied_consumed = ex.execute(
+                "write_file",
+                {"path": "y.txt", "content": "hi", "overwrite": True},
+                execution_gate={"status": "ready"},
+                approval={"approved": True, "tool_name": "write_file", "risk_class": "low", "consumed_at": "2026-01-01T00:00:00Z"},
+            )
+            self.assertFalse(denied_consumed.ok)
+            self.assertIn("consumed", denied_consumed.policy_reason.lower())
 
     def test_tool_timeout_is_enforced(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

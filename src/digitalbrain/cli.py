@@ -478,6 +478,8 @@ def main(argv: list[str] | None = None) -> int:
                     if isinstance(plan.metadata, dict):
                         gate = plan.metadata.get("execution_gate")
                         approval = plan.metadata.get("execution_approval")
+                        if isinstance(approval, dict):
+                            approval = {**approval, "plan_db_path": str(Path(args.plan_db))}
 
             # Build executor with explicit mutating opt-in; default remains read-only only.
             from digitalbrain.execution import default_tools
@@ -487,6 +489,15 @@ def main(argv: list[str] | None = None) -> int:
             executor = ToolExecutor(workspace_root=args.workspace, policy=policy, audit_log=audit, tools=all_tools)
 
             result = executor.execute(args.run_tool, tool_args, execution_gate=gate, approval=approval)
+            if result.ok and result.allowed and approval and isinstance(approval, dict) and args.plan_db and args.audit_db:
+                with AuditLog(args.audit_db) as audit_log:
+                    if approval.get("consumed_at") or approval.get("plan_id"):
+                        audit_log.record(
+                            "plan.execution_approval_consumed",
+                            actor="cli",
+                            outcome="consumed",
+                            details={"plan_id": approval.get("plan_id"), "tool": result.tool},
+                        )
             print(f"Tool: {result.tool}")
             print(f"Allowed: {result.allowed}")
             print(f"OK: {result.ok}")

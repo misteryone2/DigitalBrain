@@ -79,9 +79,27 @@ class SQLitePlanStoreTests(unittest.TestCase):
                     steps=[{"id": "step-1", "title": "Do", "status": "pending"}],
                     source="test",
                 )
-                approved = store.approve_execution(ready.id, reason="ok", actor="test")
+                approved = store.approve_execution(ready.id, reason="ok", actor="test", tool_name="write_file", risk_class="low")
                 self.assertEqual(approved.lifecycle_status, "approved_for_execution")
                 self.assertTrue(approved.metadata["execution_approval"]["approved"])
+                self.assertEqual(approved.metadata["execution_approval"]["tool_name"], "write_file")
+
+    def test_consume_execution_approval_single_use(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "plans.db"
+            with SQLitePlanStore(db) as store:
+                plan = store.save_plan(
+                    goal="Ready",
+                    status="accepted",
+                    steps=[{"id": "step-1", "title": "Do", "status": "pending"}],
+                    source="test",
+                )
+                approved = store.approve_execution(plan.id, reason="ok", tool_name="write_file", risk_class="low")
+                approval = approved.metadata["execution_approval"]
+                consumed = store.consume_execution_approval(plan.id, approved_at=approval["approved_at"], tool_name="write_file", risk_class="low")
+                self.assertIsNotNone(consumed.metadata["execution_approval"]["consumed_at"])
+                with self.assertRaises(ValueError):
+                    store.consume_execution_approval(plan.id, approved_at=approval["approved_at"], tool_name="write_file", risk_class="low")
 
     def test_rejects_invalid_plan(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

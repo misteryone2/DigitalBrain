@@ -69,6 +69,7 @@ class ToolExecutor:
         *,
         execution_gate: dict[str, Any] | None = None,
         approval: dict[str, Any] | None = None,
+        consume_approval: bool = True,
     ) -> ToolExecutionResult:
         args = dict(arguments or {})
         spec = self.tools.get(tool_name)
@@ -92,6 +93,7 @@ class ToolExecutor:
             read_only=spec.read_only,
             execution_gate=execution_gate,
             approval=approval,
+            tool_risk_class=spec.risk_class,
         )
         if not decision.allowed:
             self._audit("tool.denied", "denied", {"tool": tool_name, "reason": decision.reason, "arguments": args})
@@ -107,8 +109,43 @@ class ToolExecutor:
             self._audit("tool.failed", "failed", {"tool": tool_name, "error": str(exc)})
             return ToolExecutionResult(tool_name, True, False, None, str(exc), decision.reason)
 
-        self._audit("tool.executed", "ok", {"tool": tool_name, "output_keys": sorted(output.keys()), "risk_class": spec.risk_class})
+        consumed = False
+        if consume_approval and (not spec.read_only) and bool((approval or {}).get("approved", False)):
+            consumed = self._consume_approval(approval, tool_name=tool_name, risk_class=spec.risk_class)
+        self._audit(
+            "tool.executed",
+            "ok",
+            {
+                "tool": tool_name,
+                "output_keys": sorted(output.keys()),
+                "risk_class": spec.risk_class,
+                "approval_consumed": consumed,
+            },
+        )
         return ToolExecutionResult(tool_name, True, True, output, None, decision.reason)
+
+    def _consume_approval(self, approval: dict[str, Any] | None, *, tool_name: str, risk_class: str) -> bool:
+        if not approval:
+            return False
+        plan_id = approval.get("plan_id")
+        approved_at = approval.get("approved_at")
+        if not plan_id or not approved_at:
+            return False
+        # Avoid circular import at module import time; consumption is best-effort.
+        from digitalbrain.planning import SQLitePlanStore  # local import
+
+        db_path = getattr(self.audit, "path", None)
+        # Approval consumption is stored in plan DB by caller path convention; if unavailable, skip.
+        plan_db = approval.get("plan_db_path")
+        path = Path(plan_db) if plan_db else (Path(db_path) if db_path and str(db_path).endswith("plans.db") else None)
+        if path is None or not path.exists():
+            return False
+        try:
+            with SQLitePlanStore(path) as store:
+                store.consume_execution_approval(str(plan_id), approved_at=str(approved_at), tool_name=tool_name, risk_class=risk_class)
+            return True
+        except Exception:
+            return False
 
     @staticmethod
     def _run_with_timeout(spec: ToolSpec, args: dict[str, Any]) -> dict[str, Any]:
