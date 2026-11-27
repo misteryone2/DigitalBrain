@@ -204,9 +204,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--sandbox-mode",
-        choices=["host", "container", "auto"],
+        choices=["host", "container", "auto", "required"],
         default="host",
-        help="Sandbox mode for tool execution: host subprocess (default), container (Docker), or auto.",
+        help="Sandbox mode for tool execution: host (default), container, auto, or required (container or fail).",
     )
     parser.add_argument(
         "--container-image",

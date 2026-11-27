@@ -250,9 +250,9 @@ class ToolExecutor:
         mode = (self.sandbox_mode or "auto").lower()
         if mode == "host":
             return "host"
-        if mode == "container":
+        if mode in {"container", "required"}:
             if not self._docker_available():
-                raise RuntimeError("Sandbox mode 'container' requested but Docker is unavailable.")
+                raise RuntimeError(f"Sandbox mode '{mode}' requested but Docker is unavailable.")
             return "container"
         if mode == "auto":
             return "container" if self._docker_available() else "host"
