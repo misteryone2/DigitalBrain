@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from digitalbrain.core.audit import AuditLog
+from digitalbrain.execution import winjob
 from digitalbrain.execution.policy import ExecutionPolicy
 from digitalbrain.execution.tools import ToolSpec, default_tools
 
@@ -55,6 +56,7 @@ class ToolExecutor:
         container_seccomp: str | None = None,
         container_apparmor: str | None = None,
         require_image_digest: bool = False,
+        host_job_limits: bool = True,
     ) -> None:
         self.workspace_root = Path(workspace_root).resolve()
         self.tools = tools or default_tools(self.workspace_root)
@@ -66,6 +68,7 @@ class ToolExecutor:
         self.container_seccomp = container_seccomp
         self.container_apparmor = container_apparmor
         self.require_image_digest = require_image_digest
+        self.host_job_limits = host_job_limits
 
     def list_tools(self) -> list[dict[str, Any]]:
         return [
@@ -280,6 +283,9 @@ class ToolExecutor:
             "TMP": os.environ.get("TMP", ""),
         }
         max_output_bytes = int(spec.limits.get("max_output_bytes", 262144))
+        max_memory_bytes = int(spec.limits.get("max_memory_bytes", 256 * 1024 * 1024))
+        max_processes = int(spec.limits.get("max_processes", 16))
+        job = None
         with tempfile.TemporaryFile(mode="w+b") as stdout_f, tempfile.TemporaryFile(mode="w+b") as stderr_f:
             cmd = [sys.executable, "-I", "-m", "digitalbrain.execution.worker"]
             creationflags = 0
@@ -299,11 +305,20 @@ class ToolExecutor:
                 creationflags=creationflags,
                 start_new_session=start_new_session,
             )
+            if os.name == "nt" and self.host_job_limits:
+                job = winjob.create_job(name=f"digitalbrain-tool-{spec.name}-{uuid.uuid4().hex[:8]}", max_memory_bytes=max_memory_bytes, max_processes=max_processes)
+                if job is not None:
+                    # _handle is available on Windows subprocess.Popen
+                    handle = int(getattr(proc, "_handle", 0) or 0)
+                    if handle:
+                        winjob.assign_process(job, handle)
             try:
                 proc.communicate(input=json.dumps(payload).encode("utf-8"), timeout=max(0.1, float(spec.timeout_s)))
             except subprocess.TimeoutExpired as exc:
                 self._kill_process_tree(proc)
                 raise TimeoutError(f"Tool '{spec.name}' timed out after {spec.timeout_s}s.") from exc
+            finally:
+                winjob.close_job(job)
 
             stdout_f.seek(0)
             stderr_f.seek(0)
