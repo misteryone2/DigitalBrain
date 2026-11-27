@@ -722,7 +722,9 @@ def main(argv: list[str] | None = None) -> int:
             os.environ["DIGITALBRAIN_SANDBOX_POLICY_FILE"] = args.sandbox_policy_file
         if args.attestation_path:
             os.environ["DIGITALBRAIN_ATTESTATION_PATH"] = args.attestation_path
-        sandbox_policy = SandboxPolicyConfig.from_env_and_file()
+        from digitalbrain.execution.sandbox_policy import SandboxPolicyConfig as SandboxPolicyConfigRuntime
+
+        sandbox_policy = SandboxPolicyConfigRuntime.from_env_and_file()
         audit = AuditLog(args.audit_db) if args.audit_db else None
         try:
             tools = None
