@@ -51,7 +51,7 @@ class ToolExecutor:
     ) -> None:
         self.workspace_root = Path(workspace_root).resolve()
         self.tools = tools or default_tools(self.workspace_root)
-        self.policy = policy or ExecutionPolicy(allowed_tools={n for n, t in self.tools.items() if t.read_only})
+        self.policy = policy or ExecutionPolicy(allowed_tools=set(self.tools.keys()))
         self.audit = audit_log
         self.isolated = isolated
 
@@ -155,8 +155,7 @@ class ToolExecutor:
     def _reserve_approval(self, approval: dict[str, Any] | None, *, tool_name: str, risk_class: str) -> bool:
         path = self._approval_store_path(approval)
         if not path or not approval:
-            # No plan-db context: allow only non-mutating paths; mutating without durable approval is denied earlier.
-            return False
+            raise ValueError("Mutating execution requires durable plan approval context (plan_db_path/plan_id/approved_at).")
         plan_id = approval.get("plan_id")
         approved_at = approval.get("approved_at")
         if not plan_id or not approved_at:

@@ -231,7 +231,7 @@ class TestExecution(unittest.TestCase):
                         read_only=True,
                         risk_class="none",
                         timeout_s=0.01,
-                        handler=lambda: __import__("time").sleep(0.1) or {"ok": True},
+                        handler=lambda: __import__("time").sleep(0.2) or {"ok": True},
                     )
                 },
             )
