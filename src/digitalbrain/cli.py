@@ -192,6 +192,21 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Enable mutating tools in policy for this command. Mutating tools still require ready gate and explicit plan approval.",
     )
+    parser.add_argument(
+        "--list-approvals",
+        action="store_true",
+        help="List execution approvals from --plan-db (optionally --get-plan/--approval-state filters).",
+    )
+    parser.add_argument(
+        "--approval-state",
+        help="Filter --list-approvals by state (approved|reserved|executed|failed|cancelled).",
+    )
+    parser.add_argument(
+        "--resolve-approval",
+        nargs=3,
+        metavar=("PLAN_ID", "APPROVED_AT", "STATE"),
+        help="Admin-resolve a reserved approval (STATE: executed|failed|cancelled). Requires --plan-db.",
+    )
     return parser
 
 
@@ -261,7 +276,7 @@ def main(argv: list[str] | None = None) -> int:
         bool(args.correct_memory),
     ]
     knowledge_actions = [bool(args.add_fact), args.list_facts, args.knowledge_stats]
-    plan_actions = [args.list_plans, bool(args.get_plan), bool(args.replan), bool(args.set_plan_lifecycle), bool(args.record_step_outcome), bool(args.approve_plan_execution)]
+    plan_actions = [args.list_plans, bool(args.get_plan), bool(args.replan), bool(args.set_plan_lifecycle), bool(args.record_step_outcome), bool(args.approve_plan_execution), args.list_approvals, bool(args.resolve_approval)]
     audit_actions = [args.list_audit]
     execution_actions = [args.list_tools, bool(args.run_tool)]
     groups = [any(memory_actions), any(knowledge_actions), any(plan_actions), any(audit_actions), any(execution_actions)]
@@ -272,13 +287,15 @@ def main(argv: list[str] | None = None) -> int:
     if sum(1 for a in knowledge_actions if a) > 1:
         parser.error("Use only one of --add-fact, --list-facts, or --knowledge-stats")
     if sum(1 for a in plan_actions if a) > 1:
-        parser.error("Use only one of --list-plans, --get-plan, --replan, --set-plan-lifecycle, --record-step-outcome, or --approve-plan-execution")
+        parser.error("Use only one plan action: --list-plans, --get-plan, --replan, --set-plan-lifecycle, --record-step-outcome, --approve-plan-execution, --list-approvals, or --resolve-approval")
     if sum(1 for a in execution_actions if a) > 1:
         parser.error("Use only one of --list-tools or --run-tool")
     if args.run_tool and args.tool_plan_id and not args.plan_db:
         parser.error("--tool-plan-id requires --plan-db")
     if args.approve_plan_execution and not args.plan_db:
         parser.error("--approve-plan-execution requires --plan-db")
+    if (args.list_approvals or args.resolve_approval) and not args.plan_db:
+        parser.error("Approval commands require --plan-db")
     if sum(groups) > 1:
         parser.error("Use memory, knowledge, plan, audit, or execution commands separately")
 
@@ -396,6 +413,66 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Approved tool: {approval.get('tool_name')}")
         if approval.get("risk_class"):
             print(f"Risk class: {approval.get('risk_class')}")
+        return 0
+
+    if args.list_approvals:
+        if not args.plan_db:
+            parser.error("--list-approvals requires --plan-db")
+        with SQLitePlanStore(args.plan_db) as plans:
+            approvals = plans.list_execution_approvals(plan_id=args.get_plan, state=args.approval_state)
+        if not approvals:
+            print("No execution approvals found.")
+            return 0
+        for a in approvals:
+            state = a.get("execution_state") or ("consumed" if a.get("consumed_at") else "approved")
+            print(f"{a.get('plan_id')} {a.get('approved_at')} state={state} tool={a.get('tool_name')} risk={a.get('risk_class')}")
+            if a.get("reason"):
+                print(f"  reason: {a.get('reason')}")
+            if a.get("execution_error"):
+                print(f"  error: {a.get('execution_error')}")
+        return 0
+
+    if args.resolve_approval:
+        if not args.plan_db:
+            parser.error("--resolve-approval requires --plan-db")
+        plan_id, approved_at, state = args.resolve_approval
+        if state not in {"executed", "failed", "cancelled"}:
+            print("Error: resolution state must be executed, failed, or cancelled.")
+            return 1
+        audit = AuditLog(args.audit_db) if args.audit_db else None
+        try:
+            with SQLitePlanStore(args.plan_db) as plans:
+                approvals = plans.list_execution_approvals(plan_id=plan_id)
+                match = next((a for a in approvals if a.get("approved_at") == approved_at), None)
+                if match is None:
+                    print("Error: approval not found.")
+                    return 1
+                try:
+                    rec = plans.finalize_execution_approval(
+                        plan_id,
+                        approved_at=approved_at,
+                        tool_name=str(match.get("tool_name") or ""),
+                        risk_class=match.get("risk_class"),
+                        ok=state == "executed",
+                        error=args.reason if state != "executed" else None,
+                        actor="cli-admin",
+                        resolution=state,
+                    )
+                except ValueError as exc:
+                    print(f"Error: {exc}")
+                    return 1
+            if audit is not None:
+                audit.record(
+                    "plan.execution_approval_resolved",
+                    actor="cli-admin",
+                    outcome=state,
+                    details={"plan_id": plan_id, "approved_at": approved_at, "state": state, "reason": args.reason},
+                )
+        finally:
+            if audit is not None:
+                audit.close()
+        print(f"Plan record: {rec.id}")
+        print(f"Approval {approved_at} resolved: {state}")
         return 0
 
     if args.replan:

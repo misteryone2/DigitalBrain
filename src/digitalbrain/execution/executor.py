@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -221,24 +223,45 @@ class ToolExecutor:
 
     def _run_in_subprocess(self, spec: ToolSpec, args: dict[str, Any]) -> dict[str, Any]:
         payload = {"workspace": str(self.workspace_root), "tool_name": spec.name, "arguments": args}
-        env = {"PYTHONPATH": str(Path(__file__).resolve().parents[2]), "PATH": os.environ.get("PATH", "")}
-        try:
-            proc = subprocess.run(
-                [sys.executable, "-m", "digitalbrain.execution.worker"],
-                input=json.dumps(payload),
+        src_path = str(Path(__file__).resolve().parents[2])
+        env = {
+            "PYTHONPATH": src_path,
+            "PATH": os.environ.get("PATH", ""),
+            "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),
+            "TEMP": os.environ.get("TEMP", ""),
+            "TMP": os.environ.get("TMP", ""),
+        }
+        with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as stdout_f, tempfile.TemporaryFile(mode="w+", encoding="utf-8") as stderr_f:
+            cmd = [sys.executable, "-I", "-m", "digitalbrain.execution.worker"]
+            creationflags = 0
+            start_new_session = False
+            if os.name == "nt":
+                creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+            else:
+                start_new_session = True
+            proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=stdout_f,
+                stderr=stderr_f,
                 text=True,
-                capture_output=True,
-                timeout=max(0.1, float(spec.timeout_s)),
                 cwd=str(self.workspace_root),
                 env=env,
-                check=False,
+                creationflags=creationflags,
+                start_new_session=start_new_session,
             )
-        except subprocess.TimeoutExpired as exc:
-            raise TimeoutError(f"Tool '{spec.name}' timed out after {spec.timeout_s}s.") from exc
+            try:
+                proc.communicate(input=json.dumps(payload), timeout=max(0.1, float(spec.timeout_s)))
+            except subprocess.TimeoutExpired as exc:
+                self._kill_process_tree(proc)
+                raise TimeoutError(f"Tool '{spec.name}' timed out after {spec.timeout_s}s.") from exc
 
-        stdout = (proc.stdout or "").strip()
+            stdout_f.seek(0)
+            stderr_f.seek(0)
+            stdout = stdout_f.read().strip()
+            stderr = stderr_f.read().strip()
+
         if not stdout:
-            stderr = (proc.stderr or "").strip()
             raise RuntimeError(f"Tool worker produced no output. rc={proc.returncode} stderr={stderr[:500]}")
         try:
             data = json.loads(stdout)
@@ -252,6 +275,23 @@ class ToolExecutor:
                 raise TypeError("Tool handler must return a dict.")
             return output
         raise RuntimeError(str(data.get("error") or "Tool failed."))
+
+    @staticmethod
+    def _kill_process_tree(proc: subprocess.Popen[str]) -> None:
+        try:
+            if os.name == "nt":
+                subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True, text=True, check=False)
+            else:
+                os.killpg(proc.pid, signal.SIGKILL)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+        try:
+            proc.communicate(timeout=1)
+        except Exception:
+            pass
 
     @staticmethod
     def _run_in_process_with_timeout(spec: ToolSpec, args: dict[str, Any]) -> dict[str, Any]:

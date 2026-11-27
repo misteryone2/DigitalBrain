@@ -194,6 +194,30 @@ class TestExecution(unittest.TestCase):
             )
             self.assertFalse(ok2.ok)
 
+    def test_mkdir_mutating_tool_with_approval(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            plan_db = root / "plans.db"
+            from digitalbrain.planning import SQLitePlanStore
+            with SQLitePlanStore(plan_db) as store:
+                plan = store.save_plan(
+                    goal="Mkdir",
+                    status="accepted",
+                    steps=[{"id": "step-1", "title": "Mkdir", "status": "pending"}],
+                    source="test",
+                    metadata={"execution_gate": {"status": "ready", "executable": True, "reasons": []}},
+                )
+                approved = store.approve_execution(plan.id, reason="ok", tool_name="mkdir", risk_class="low")
+                approval = dict(approved.metadata["execution_approval"])
+                approval["plan_db_path"] = str(plan_db)
+
+            all_tools = default_tools(root)
+            policy = ExecutionPolicy(allowed_tools=set(all_tools.keys()), allow_mutating=True)
+            ex = ToolExecutor(workspace_root=root, policy=policy, tools=all_tools, isolated=True)
+            res = ex.execute("mkdir", {"path": "newdir"}, execution_gate={"status": "ready"}, approval=approval)
+            self.assertTrue(res.ok)
+            self.assertTrue((root / "newdir").is_dir())
+
     def test_tool_timeout_is_enforced(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             from digitalbrain.execution.tools import ToolSpec

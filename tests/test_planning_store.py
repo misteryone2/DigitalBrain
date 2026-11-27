@@ -121,6 +121,23 @@ class SQLitePlanStoreTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     store.reserve_execution_approval(plan.id, approved_at=at, tool_name="write_file", risk_class="low")
 
+    def test_admin_resolve_reserved_approval(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "plans.db"
+            with SQLitePlanStore(db) as store:
+                plan = store.save_plan(
+                    goal="Ready",
+                    status="accepted",
+                    steps=[{"id": "step-1", "title": "Do", "status": "pending"}],
+                    source="test",
+                )
+                approved = store.approve_execution(plan.id, reason="ok", tool_name="write_file", risk_class="low")
+                at = approved.metadata["execution_approval"]["approved_at"]
+                store.reserve_execution_approval(plan.id, approved_at=at, tool_name="write_file", risk_class="low")
+                rec = store.finalize_execution_approval(plan.id, approved_at=at, tool_name="write_file", risk_class="low", ok=False, error="manual", actor="admin", resolution="cancelled")
+                self.assertEqual(rec.metadata["execution_approval"]["execution_state"], "cancelled")
+                self.assertEqual(rec.metadata["execution_approval"]["finalized_by"], "admin")
+
     def test_rejects_invalid_plan(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             db = Path(tmp) / "plans.db"

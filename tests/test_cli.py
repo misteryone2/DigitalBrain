@@ -266,6 +266,34 @@ class CLITests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertTrue((root / "a.txt").exists())
 
+    def test_approval_listing_and_admin_resolve(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            plan_db = Path(tmp) / "plans.db"
+            from digitalbrain.planning import SQLitePlanStore
+            with SQLitePlanStore(plan_db) as store:
+                plan = store.save_plan(
+                    goal="Write",
+                    status="accepted",
+                    steps=[{"id": "step-1", "title": "Write", "status": "pending"}],
+                    source="test",
+                    metadata={"execution_gate": {"status": "ready", "executable": True, "reasons": []}},
+                )
+                approved = store.approve_execution(plan.id, reason="ok", tool_name="write_file", risk_class="low")
+                at = approved.metadata["execution_approval"]["approved_at"]
+                store.reserve_execution_approval(plan.id, approved_at=at, tool_name="write_file", risk_class="low")
+
+            out = io.StringIO()
+            with redirect_stdout(out):
+                code = main(["--plan-db", str(plan_db), "--list-approvals", "--approval-state", "reserved"])
+            self.assertEqual(code, 0)
+            self.assertIn("state=reserved", out.getvalue())
+
+            out = io.StringIO()
+            with redirect_stdout(out):
+                code = main(["--plan-db", str(plan_db), "--resolve-approval", plan.id, at, "cancelled", "--reason", "manual"])
+            self.assertEqual(code, 0)
+            self.assertIn("resolved: cancelled", out.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

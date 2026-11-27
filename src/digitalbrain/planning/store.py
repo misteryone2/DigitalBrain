@@ -339,6 +339,8 @@ class SQLitePlanStore:
         risk_class: str | None = None,
         ok: bool,
         error: str | None = None,
+        actor: str = "system",
+        resolution: str | None = None,
     ) -> PlanRecord:
         with self._connection:
             row = self._get_row(plan_id)
@@ -363,11 +365,15 @@ class SQLitePlanStore:
                     raise ValueError("Approval is not reserved.")
                 if item.get("finalized_at"):
                     raise ValueError("Approval already finalized.")
+                state = resolution or ("executed" if ok else "failed")
+                if state not in {"executed", "failed", "cancelled"}:
+                    raise ValueError("Resolution must be executed, failed, or cancelled.")
                 item["finalized_at"] = now
                 item["consumed_at"] = now
                 item["consumed_by_tool"] = tool_name
-                item["execution_state"] = "executed" if ok else "failed"
+                item["execution_state"] = state
                 item["execution_error"] = error
+                item["finalized_by"] = actor
                 found = True
                 if metadata.get("execution_approval", {}).get("approved_at") == approved_at:
                     current = dict(metadata.get("execution_approval", {}))
@@ -376,6 +382,7 @@ class SQLitePlanStore:
                     current["consumed_by_tool"] = tool_name
                     current["execution_state"] = item["execution_state"]
                     current["execution_error"] = error
+                    current["finalized_by"] = actor
                     metadata["execution_approval"] = current
                 break
             if not found:
@@ -389,6 +396,26 @@ class SQLitePlanStore:
         if rec is None:  # pragma: no cover
             raise RuntimeError("Plan not found after approval finalization")
         return rec
+
+    def list_execution_approvals(self, *, plan_id: str | None = None, state: str | None = None) -> list[dict[str, Any]]:
+        rows = self._connection.execute("SELECT id, metadata_json FROM plan_records ORDER BY created_at DESC, rowid DESC").fetchall()
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            if plan_id and row["id"] != plan_id:
+                continue
+            metadata = json.loads(row["metadata_json"]) if row["metadata_json"] else {}
+            approvals = metadata.get("execution_approvals", []) if isinstance(metadata, dict) else []
+            if not isinstance(approvals, list):
+                continue
+            for a in approvals:
+                if not isinstance(a, dict):
+                    continue
+                item = {**a, "plan_id": row["id"]}
+                item_state = item.get("execution_state") or ("consumed" if item.get("consumed_at") else "approved")
+                if state and item_state != state:
+                    continue
+                result.append(item)
+        return result
 
     def consume_execution_approval(
         self,

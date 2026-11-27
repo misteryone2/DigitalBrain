@@ -33,6 +33,8 @@ The project is developed incrementally. The first milestone is a small, testable
 - [x] M4 baseline: read-only tool registry (`list_dir`, `read_file`, `grep`) with workspace boundary, allowlist policy, execution gate awareness, and audit events
 - [x] M4 hardening baseline: mutating tools disabled by default; explicit approval + ready gate required for mutating execution; `write_file` exists but is policy-gated (no auto-execution)
 - [x] M4 sandbox hardening: subprocess-isolated default tools, per-tool timeout, bounded args/outputs, symlink-path rejection, per-tool risk class metadata, scoped approvals, risk-class enforcement, single-use reserve/finalize approval lifecycle
+- [x] Approval admin recovery: explicit list/resolve commands for reserved approvals (auditata, no auto-recovery)
+- [x] Controlled low-risk mutating tools: `write_file`, `mkdir` (policy-gated, approval+ready+opt-in required)
 
 ## Requirements
 

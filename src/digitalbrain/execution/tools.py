@@ -140,6 +140,20 @@ def tool_write_file(root: Path, *, path: str, content: str, overwrite: bool = Fa
     return {"path": str(target), "chars": len(content), "overwritten": target.exists()}
 
 
+def tool_mkdir(root: Path, *, path: str, exist_ok: bool = True) -> dict[str, Any]:
+    """Mutating low-risk tool: creates directory within workspace."""
+    target = _resolve_safe_path(root, path, allow_missing=True)
+    if target.exists():
+        if target.is_symlink():
+            raise ValueError("Symlink paths are not allowed.")
+        if not target.is_dir():
+            raise ValueError("Path exists and is not a directory.")
+        if not exist_ok:
+            raise ValueError("Directory already exists.")
+    target.mkdir(parents=True, exist_ok=exist_ok)
+    return {"path": str(target), "created": True}
+
+
 def default_tools(root: Path) -> dict[str, ToolSpec]:
     return {
         "list_dir": ToolSpec(
@@ -177,6 +191,15 @@ def default_tools(root: Path) -> dict[str, ToolSpec]:
             timeout_s=5.0,
             limits={"max_chars_max": 500_000},
             handler=lambda **kw: tool_write_file(root, **kw),
+        ),
+        "mkdir": ToolSpec(
+            name="mkdir",
+            description="Create a directory within workspace. Mutating low-risk; disabled by default policy.",
+            read_only=False,
+            risk_class="low",
+            timeout_s=5.0,
+            limits={},
+            handler=lambda **kw: tool_mkdir(root, **kw),
         ),
     }
 
