@@ -362,6 +362,24 @@ class ToolExecutor:
             sec_args.extend(["--security-opt", opt])
         cmd = new_cmd[:insert_at] + sec_args + new_cmd[insert_at:]
 
+        manifest = {
+            "mode": "container",
+            "image": self.container_image,
+            "network": "none",
+            "read_only": True,
+            "cpus": "1.0",
+            "memory": "512m",
+            "pids_limit": 128,
+            "no_new_privileges": True,
+            "cap_drop": ["ALL"],
+            "tmpfs": "/tmp:rw,noexec,nosuid,size=64m",
+            "seccomp": self.container_seccomp,
+            "apparmor": self.container_apparmor,
+            "workspace_mount": f"{self.workspace_root}:/workspace:rw",
+            "src_mount": f"{src_path}:/opt/digitalbrain-src:ro",
+        }
+        self._audit("tool.sandbox_manifest", "configured", {"tool": spec.name, **manifest})
+
         with tempfile.TemporaryFile(mode="w+b") as stdout_f, tempfile.TemporaryFile(mode="w+b") as stderr_f:
             proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=stdout_f, stderr=stderr_f, text=False)
             try:
