@@ -214,6 +214,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Container image for --sandbox-mode container/auto (default: python:3.12-slim).",
     )
     parser.add_argument(
+        "--container-seccomp",
+        help="Optional seccomp profile for container sandbox (Docker --security-opt seccomp=...).",
+    )
+    parser.add_argument(
+        "--container-apparmor",
+        help="Optional apparmor profile for container sandbox (Docker --security-opt apparmor=...).",
+    )
+    parser.add_argument(
+        "--require-image-digest",
+        action="store_true",
+        help="Require --container-image to include @sha256:... digest.",
+    )
+    parser.add_argument(
         "--list-approvals",
         action="store_true",
         help="List execution approvals from --plan-db (optionally --get-plan/--approval-state filters).",
@@ -560,6 +573,9 @@ def main(argv: list[str] | None = None) -> int:
                     audit_log=audit,
                     sandbox_mode=args.sandbox_mode,
                     container_image=args.container_image,
+                    container_seccomp=args.container_seccomp,
+                    container_apparmor=args.container_apparmor,
+                    require_image_digest=bool(args.require_image_digest),
                 )
                 for spec in executor.list_tools():
                     ro = "read-only" if spec["read_only"] else "mutating"
@@ -604,6 +620,9 @@ def main(argv: list[str] | None = None) -> int:
                 tools=all_tools,
                 sandbox_mode=args.sandbox_mode,
                 container_image=args.container_image,
+                container_seccomp=args.container_seccomp,
+                container_apparmor=args.container_apparmor,
+                require_image_digest=bool(args.require_image_digest),
             )
 
             result = executor.execute(args.run_tool, tool_args, execution_gate=gate, approval=approval)

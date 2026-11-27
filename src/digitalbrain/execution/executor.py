@@ -52,6 +52,9 @@ class ToolExecutor:
         isolated: bool = True,
         sandbox_mode: str = "host",
         container_image: str = "python:3.12-slim",
+        container_seccomp: str | None = None,
+        container_apparmor: str | None = None,
+        require_image_digest: bool = False,
     ) -> None:
         self.workspace_root = Path(workspace_root).resolve()
         self.tools = tools or default_tools(self.workspace_root)
@@ -60,6 +63,9 @@ class ToolExecutor:
         self.isolated = isolated
         self.sandbox_mode = sandbox_mode
         self.container_image = container_image
+        self.container_seccomp = container_seccomp
+        self.container_apparmor = container_apparmor
+        self.require_image_digest = require_image_digest
 
     def list_tools(self) -> list[dict[str, Any]]:
         return [
@@ -312,6 +318,7 @@ class ToolExecutor:
         docker = shutil.which("docker")
         if not docker:
             raise RuntimeError("Docker is unavailable.")
+        self._validate_container_image(self.container_image)
 
         src_path = Path(__file__).resolve().parents[2]
         cmd = [
@@ -333,6 +340,27 @@ class ToolExecutor:
         ]
         container_name = f"db-tool-{uuid.uuid4().hex[:12]}"
         cmd[3:3] = ["--name", container_name]
+        security_opts = ["no-new-privileges"]
+        if self.container_seccomp:
+            security_opts.append(f"seccomp={self.container_seccomp}")
+        if self.container_apparmor:
+            security_opts.append(f"apparmor={self.container_apparmor}")
+        # replace default security-opt no-new-privileges with configured set
+        new_cmd: list[str] = []
+        skip_next = False
+        for i, part in enumerate(cmd):
+            if skip_next:
+                skip_next = False
+                continue
+            if part == "--security-opt":
+                skip_next = True
+                continue
+            new_cmd.append(part)
+        insert_at = new_cmd.index("--cap-drop")
+        sec_args: list[str] = []
+        for opt in security_opts:
+            sec_args.extend(["--security-opt", opt])
+        cmd = new_cmd[:insert_at] + sec_args + new_cmd[insert_at:]
 
         with tempfile.TemporaryFile(mode="w+b") as stdout_f, tempfile.TemporaryFile(mode="w+b") as stderr_f:
             proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=stdout_f, stderr=stderr_f, text=False)
@@ -352,6 +380,13 @@ class ToolExecutor:
             stderr_bytes = stderr_f.read(65536)
 
         return self._parse_worker_output(spec, stdout_bytes, stderr_bytes, proc.returncode, max_output_bytes)
+
+    def _validate_container_image(self, image: str) -> None:
+        img = (image or "").strip()
+        if not img:
+            raise ValueError("Container image must not be empty.")
+        if self.require_image_digest and "@sha256:" not in img:
+            raise ValueError("Container image must be pinned by digest when require_image_digest is enabled.")
 
     @staticmethod
     def _parse_worker_output(spec: ToolSpec, stdout_bytes: bytes, stderr_bytes: bytes, returncode: int, max_output_bytes: int) -> dict[str, Any]:
