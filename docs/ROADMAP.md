@@ -53,10 +53,10 @@ This roadmap turns the [founding vision](VISION.md) into incremental, verifiable
 - [x] Sandbox hardening baseline: subprocess worker for default tools, timeout, best-effort process-tree kill, arg/output limits, per-tool output caps, symlink-path rejection, risk-class enforcement
 - [x] Docker container sandbox mode (`host|container|auto|required`) with network-off/read-only/cpu/memory/pids/cap-drop/no-new-privileges/tmpfs
 - [x] Policy: mutating tools denied unless sandbox resolves to container
-- [x] Hardening options: optional image digest requirement, optional seccomp/apparmor profiles, env-configurable sandbox policy, container manifest audit (`tool.sandbox_manifest`)
+- [x] Hardening options: digest requirement, optional seccomp/apparmor, env-configurable policy, Windows host Job Object limits (best-effort), container manifest audit (`tool.sandbox_manifest`)
 - [x] Audit logs for tool actions/decisions (`tool.requested/allowed/denied/executed/failed`) and approval lifecycle events
 - [x] CLI tool inspection/execution commands (`--list-tools`, `--run-tool`, `--approve-plan-execution`, `--allow-mutating-tools`, `--list-approvals`, `--resolve-approval`, sandbox options)
-- [ ] Hardened container-grade isolation by default across environments (signed image provenance/attestation, enforced host baseline, centralized signed policy, non-Docker/containerd parity)
+- [ ] Hardened container-grade isolation by default across environments (signed image provenance/attestation, mandatory seccomp/apparmor, centralized signed policy, non-Docker/containerd parity)
 - [ ] Broader mutating tool set with per-tool risk classes and human approval workflow
 
 ## M5 — Learning and metacognition
