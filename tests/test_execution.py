@@ -118,14 +118,15 @@ class TestExecution(unittest.TestCase):
             self.assertFalse(denied_scope.ok)
             self.assertIn("scoped", denied_scope.policy_reason.lower())
 
-            ok = ex.execute(
+            # No plan-db approval context: mutating execution should be denied at reserve stage.
+            denied_noctx = ex.execute(
                 "write_file",
                 {"path": "x.txt", "content": "hi", "overwrite": True},
                 execution_gate={"status": "ready"},
                 approval={"approved": True, "tool_name": "write_file", "risk_class": "low"},
             )
-            self.assertTrue(ok.ok)
-            self.assertEqual((root / "x.txt").read_text(encoding="utf-8"), "hi")
+            self.assertFalse(denied_noctx.allowed)
+            self.assertIn("reserve", denied_noctx.policy_reason.lower())
 
     def test_mutating_tool_denied_on_risk_mismatch_or_consumed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -151,11 +152,54 @@ class TestExecution(unittest.TestCase):
             self.assertFalse(denied_consumed.ok)
             self.assertIn("consumed", denied_consumed.policy_reason.lower())
 
+    def test_mutating_tool_reserves_and_finalizes_approval(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            plan_db = root / "plans.db"
+            from digitalbrain.planning import SQLitePlanStore
+
+            with SQLitePlanStore(plan_db) as store:
+                plan = store.save_plan(
+                    goal="Write",
+                    status="accepted",
+                    steps=[{"id": "step-1", "title": "Write", "status": "pending"}],
+                    source="test",
+                    metadata={"execution_gate": {"status": "ready", "executable": True, "reasons": []}},
+                )
+                approved = store.approve_execution(plan.id, reason="ok", tool_name="write_file", risk_class="low")
+                approval = dict(approved.metadata["execution_approval"])
+                approval["plan_db_path"] = str(plan_db)
+
+            all_tools = default_tools(root)
+            policy = ExecutionPolicy(allowed_tools=set(all_tools.keys()), allow_mutating=True)
+            ex = ToolExecutor(workspace_root=root, policy=policy, tools=all_tools, isolated=True)
+            ok = ex.execute(
+                "write_file",
+                {"path": "x.txt", "content": "hi", "overwrite": True},
+                execution_gate={"status": "ready"},
+                approval=approval,
+            )
+            self.assertTrue(ok.ok)
+            with SQLitePlanStore(plan_db) as store:
+                rec = store.get(plan.id)
+                assert rec is not None
+                self.assertEqual(rec.metadata["execution_approval"]["execution_state"], "executed")
+
+            # Single-use: second execution denied
+            ok2 = ex.execute(
+                "write_file",
+                {"path": "y.txt", "content": "hi", "overwrite": True},
+                execution_gate={"status": "ready"},
+                approval=approval,
+            )
+            self.assertFalse(ok2.ok)
+
     def test_tool_timeout_is_enforced(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             from digitalbrain.execution.tools import ToolSpec
             ex = ToolExecutor(
                 workspace_root=tmp,
+                isolated=False,  # custom handler; timeout via in-process fallback
                 tools={
                     "slow": ToolSpec(
                         name="slow",

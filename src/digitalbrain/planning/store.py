@@ -276,7 +276,7 @@ class SQLitePlanStore:
             raise RuntimeError("Plan not found after approval")
         return updated
 
-    def consume_execution_approval(
+    def reserve_execution_approval(
         self,
         plan_id: str,
         *,
@@ -294,12 +294,10 @@ class SQLitePlanStore:
             approvals = metadata.get("execution_approvals", [])
             if not isinstance(approvals, list):
                 approvals = [approvals]
-            consumed = False
             now = datetime.now(timezone.utc).isoformat()
+            found = False
             for item in approvals:
-                if not isinstance(item, dict):
-                    continue
-                if item.get("approved_at") != approved_at:
+                if not isinstance(item, dict) or item.get("approved_at") != approved_at:
                     continue
                 if item.get("tool_name") and item.get("tool_name") != tool_name:
                     continue
@@ -307,17 +305,21 @@ class SQLitePlanStore:
                     continue
                 if item.get("consumed_at"):
                     raise ValueError("Approval already consumed.")
-                item["consumed_at"] = now
-                item["consumed_by_tool"] = tool_name
-                consumed = True
+                if item.get("reserved_at") and not item.get("finalized_at"):
+                    raise ValueError("Approval already reserved.")
+                item["reserved_at"] = now
+                item["reserved_by_tool"] = tool_name
+                item["execution_state"] = "reserved"
+                found = True
                 if metadata.get("execution_approval", {}).get("approved_at") == approved_at:
                     current = dict(metadata.get("execution_approval", {}))
-                    current["consumed_at"] = now
-                    current["consumed_by_tool"] = tool_name
+                    current["reserved_at"] = now
+                    current["reserved_by_tool"] = tool_name
+                    current["execution_state"] = "reserved"
                     metadata["execution_approval"] = current
                 break
-            if not consumed:
-                raise ValueError("Approval not found for consumption.")
+            if not found:
+                raise ValueError("Approval not found for reservation.")
             metadata["execution_approvals"] = approvals
             self._connection.execute(
                 "UPDATE plan_records SET metadata_json = ? WHERE id = ?",
@@ -325,8 +327,87 @@ class SQLitePlanStore:
             )
         rec = self.get(plan_id)
         if rec is None:  # pragma: no cover
-            raise RuntimeError("Plan not found after approval consumption")
+            raise RuntimeError("Plan not found after approval reservation")
         return rec
+
+    def finalize_execution_approval(
+        self,
+        plan_id: str,
+        *,
+        approved_at: str,
+        tool_name: str,
+        risk_class: str | None = None,
+        ok: bool,
+        error: str | None = None,
+    ) -> PlanRecord:
+        with self._connection:
+            row = self._get_row(plan_id)
+            if row is None:
+                raise ValueError(f"Unknown plan: {plan_id}")
+            metadata = json.loads(row["metadata_json"]) if row["metadata_json"] else {}
+            if not isinstance(metadata, dict):
+                metadata = {"value": metadata}
+            approvals = metadata.get("execution_approvals", [])
+            if not isinstance(approvals, list):
+                approvals = [approvals]
+            now = datetime.now(timezone.utc).isoformat()
+            found = False
+            for item in approvals:
+                if not isinstance(item, dict) or item.get("approved_at") != approved_at:
+                    continue
+                if item.get("tool_name") and item.get("tool_name") != tool_name:
+                    continue
+                if item.get("risk_class") and risk_class and item.get("risk_class") != risk_class:
+                    continue
+                if not item.get("reserved_at"):
+                    raise ValueError("Approval is not reserved.")
+                if item.get("finalized_at"):
+                    raise ValueError("Approval already finalized.")
+                item["finalized_at"] = now
+                item["consumed_at"] = now
+                item["consumed_by_tool"] = tool_name
+                item["execution_state"] = "executed" if ok else "failed"
+                item["execution_error"] = error
+                found = True
+                if metadata.get("execution_approval", {}).get("approved_at") == approved_at:
+                    current = dict(metadata.get("execution_approval", {}))
+                    current["finalized_at"] = now
+                    current["consumed_at"] = now
+                    current["consumed_by_tool"] = tool_name
+                    current["execution_state"] = item["execution_state"]
+                    current["execution_error"] = error
+                    metadata["execution_approval"] = current
+                break
+            if not found:
+                raise ValueError("Approval not found for finalization.")
+            metadata["execution_approvals"] = approvals
+            self._connection.execute(
+                "UPDATE plan_records SET metadata_json = ? WHERE id = ?",
+                (json.dumps(metadata, sort_keys=True, ensure_ascii=False), plan_id),
+            )
+        rec = self.get(plan_id)
+        if rec is None:  # pragma: no cover
+            raise RuntimeError("Plan not found after approval finalization")
+        return rec
+
+    def consume_execution_approval(
+        self,
+        plan_id: str,
+        *,
+        approved_at: str,
+        tool_name: str,
+        risk_class: str | None = None,
+    ) -> PlanRecord:
+        # Backward-compatible alias: reserve+finalize as executed.
+        self.reserve_execution_approval(plan_id, approved_at=approved_at, tool_name=tool_name, risk_class=risk_class)
+        return self.finalize_execution_approval(
+            plan_id,
+            approved_at=approved_at,
+            tool_name=tool_name,
+            risk_class=risk_class,
+            ok=True,
+            error=None,
+        )
 
     def record_step_outcome(
         self,

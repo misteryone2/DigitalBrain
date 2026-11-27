@@ -98,8 +98,28 @@ class SQLitePlanStoreTests(unittest.TestCase):
                 approval = approved.metadata["execution_approval"]
                 consumed = store.consume_execution_approval(plan.id, approved_at=approval["approved_at"], tool_name="write_file", risk_class="low")
                 self.assertIsNotNone(consumed.metadata["execution_approval"]["consumed_at"])
+                self.assertEqual(consumed.metadata["execution_approval"]["execution_state"], "executed")
                 with self.assertRaises(ValueError):
                     store.consume_execution_approval(plan.id, approved_at=approval["approved_at"], tool_name="write_file", risk_class="low")
+
+    def test_reserve_and_finalize_approval(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "plans.db"
+            with SQLitePlanStore(db) as store:
+                plan = store.save_plan(
+                    goal="Ready",
+                    status="accepted",
+                    steps=[{"id": "step-1", "title": "Do", "status": "pending"}],
+                    source="test",
+                )
+                approved = store.approve_execution(plan.id, reason="ok", tool_name="write_file", risk_class="low")
+                at = approved.metadata["execution_approval"]["approved_at"]
+                reserved = store.reserve_execution_approval(plan.id, approved_at=at, tool_name="write_file", risk_class="low")
+                self.assertEqual(reserved.metadata["execution_approval"]["execution_state"], "reserved")
+                finalized = store.finalize_execution_approval(plan.id, approved_at=at, tool_name="write_file", risk_class="low", ok=False, error="boom")
+                self.assertEqual(finalized.metadata["execution_approval"]["execution_state"], "failed")
+                with self.assertRaises(ValueError):
+                    store.reserve_execution_approval(plan.id, approved_at=at, tool_name="write_file", risk_class="low")
 
     def test_rejects_invalid_plan(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -77,6 +77,8 @@ class ExecutionPolicy:
                 False,
                 f"Approval risk class '{approved_risk}' does not match tool risk '{tool_risk_class}'.",
             )
+        if (approval or {}).get("reserved_at") and not (approval or {}).get("finalized_at"):
+            return PolicyDecision(False, "Execution approval is already reserved.")
         if (approval or {}).get("consumed_at"):
             return PolicyDecision(False, "Execution approval has already been consumed.")
         return PolicyDecision(True, "Allowed mutating tool by explicit approval and ready gate.")
