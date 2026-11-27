@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
 import tempfile
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -48,12 +50,16 @@ class ToolExecutor:
         audit_log: AuditLog | None = None,
         tools: dict[str, ToolSpec] | None = None,
         isolated: bool = True,
+        sandbox_mode: str = "host",
+        container_image: str = "python:3.12-slim",
     ) -> None:
         self.workspace_root = Path(workspace_root).resolve()
         self.tools = tools or default_tools(self.workspace_root)
         self.policy = policy or ExecutionPolicy(allowed_tools=set(self.tools.keys()))
         self.audit = audit_log
         self.isolated = isolated
+        self.sandbox_mode = sandbox_mode
+        self.container_image = container_image
 
     def list_tools(self) -> list[dict[str, Any]]:
         return [
@@ -221,6 +227,35 @@ class ToolExecutor:
         return self._run_in_process_with_timeout(spec, args)
 
     def _run_in_subprocess(self, spec: ToolSpec, args: dict[str, Any]) -> dict[str, Any]:
+        mode = self._resolve_sandbox_mode()
+        if mode == "container":
+            return self._run_in_container(spec, args)
+        return self._run_in_host_process(spec, args)
+
+    def _resolve_sandbox_mode(self) -> str:
+        mode = (self.sandbox_mode or "auto").lower()
+        if mode == "host":
+            return "host"
+        if mode == "container":
+            if not self._docker_available():
+                raise RuntimeError("Sandbox mode 'container' requested but Docker is unavailable.")
+            return "container"
+        if mode == "auto":
+            return "container" if self._docker_available() else "host"
+        raise ValueError(f"Unsupported sandbox mode: {self.sandbox_mode}")
+
+    @staticmethod
+    def _docker_available() -> bool:
+        exe = shutil.which("docker")
+        if not exe:
+            return False
+        try:
+            proc = subprocess.run([exe, "version", "--format", "{{.Server.Version}}"], capture_output=True, text=True, timeout=3, check=False)
+        except Exception:
+            return False
+        return proc.returncode == 0
+
+    def _run_in_host_process(self, spec: ToolSpec, args: dict[str, Any]) -> dict[str, Any]:
         payload = {"workspace": str(self.workspace_root), "tool_name": spec.name, "arguments": args}
         src_path = str(Path(__file__).resolve().parents[2])
         env = {
@@ -261,13 +296,63 @@ class ToolExecutor:
             stdout_bytes = stdout_f.read(max_output_bytes + 1)
             stderr_bytes = stderr_f.read(65536)
 
+        return self._parse_worker_output(spec, stdout_bytes, stderr_bytes, proc.returncode, max_output_bytes)
+
+    def _run_in_container(self, spec: ToolSpec, args: dict[str, Any]) -> dict[str, Any]:
+        payload = {"workspace": "/workspace", "tool_name": spec.name, "arguments": args}
+        max_output_bytes = int(spec.limits.get("max_output_bytes", 262144))
+        docker = shutil.which("docker")
+        if not docker:
+            raise RuntimeError("Docker is unavailable.")
+
+        src_path = Path(__file__).resolve().parents[2]
+        cmd = [
+            docker, "run", "--rm", "-i",
+            "--network", "none",
+            "--read-only",
+            "--cpus", "1.0",
+            "--memory", "512m",
+            "--pids-limit", "128",
+            "--security-opt", "no-new-privileges",
+            "--cap-drop", "ALL",
+            "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m",
+            "-v", f"{self.workspace_root}:/workspace:rw",
+            "-v", f"{src_path}:/opt/digitalbrain-src:ro",
+            "-w", "/workspace",
+            "-e", "PYTHONPATH=/opt/digitalbrain-src",
+            self.container_image,
+            "python", "-I", "-m", "digitalbrain.execution.worker",
+        ]
+        container_name = f"db-tool-{uuid.uuid4().hex[:12]}"
+        cmd[3:3] = ["--name", container_name]
+
+        with tempfile.TemporaryFile(mode="w+b") as stdout_f, tempfile.TemporaryFile(mode="w+b") as stderr_f:
+            proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=stdout_f, stderr=stderr_f, text=False)
+            try:
+                proc.communicate(input=json.dumps(payload).encode("utf-8"), timeout=max(0.1, float(spec.timeout_s)))
+            except subprocess.TimeoutExpired as exc:
+                subprocess.run([docker, "kill", container_name], capture_output=True, text=True, check=False)
+                try:
+                    proc.communicate(timeout=2)
+                except Exception:
+                    pass
+                raise TimeoutError(f"Tool '{spec.name}' timed out after {spec.timeout_s}s.") from exc
+
+            stdout_f.seek(0)
+            stderr_f.seek(0)
+            stdout_bytes = stdout_f.read(max_output_bytes + 1)
+            stderr_bytes = stderr_f.read(65536)
+
+        return self._parse_worker_output(spec, stdout_bytes, stderr_bytes, proc.returncode, max_output_bytes)
+
+    @staticmethod
+    def _parse_worker_output(spec: ToolSpec, stdout_bytes: bytes, stderr_bytes: bytes, returncode: int, max_output_bytes: int) -> dict[str, Any]:
         if len(stdout_bytes) > max_output_bytes:
             raise RuntimeError(f"Tool '{spec.name}' output exceeded {max_output_bytes} bytes.")
         stdout = stdout_bytes.decode("utf-8", errors="replace").strip()
         stderr = stderr_bytes.decode("utf-8", errors="replace").strip()
-
         if not stdout:
-            raise RuntimeError(f"Tool worker produced no output. rc={proc.returncode} stderr={stderr[:500]}")
+            raise RuntimeError(f"Tool worker produced no output. rc={returncode} stderr={stderr[:500]}")
         try:
             data = json.loads(stdout)
         except json.JSONDecodeError as exc:

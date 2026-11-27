@@ -203,6 +203,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Enable mutating tools in policy for this command. Mutating tools still require ready gate and explicit plan approval.",
     )
     parser.add_argument(
+        "--sandbox-mode",
+        choices=["host", "container", "auto"],
+        default="host",
+        help="Sandbox mode for tool execution: host subprocess (default), container (Docker), or auto.",
+    )
+    parser.add_argument(
+        "--container-image",
+        default="python:3.12-slim",
+        help="Container image for --sandbox-mode container/auto (default: python:3.12-slim).",
+    )
+    parser.add_argument(
         "--list-approvals",
         action="store_true",
         help="List execution approvals from --plan-db (optionally --get-plan/--approval-state filters).",
@@ -544,7 +555,12 @@ def main(argv: list[str] | None = None) -> int:
         try:
             tools = None
             if args.list_tools:
-                executor = ToolExecutor(workspace_root=args.workspace, audit_log=audit)
+                executor = ToolExecutor(
+                    workspace_root=args.workspace,
+                    audit_log=audit,
+                    sandbox_mode=args.sandbox_mode,
+                    container_image=args.container_image,
+                )
                 for spec in executor.list_tools():
                     ro = "read-only" if spec["read_only"] else "mutating"
                     print(f"{spec['name']} ({ro}): {spec['description']}")
@@ -581,7 +597,14 @@ def main(argv: list[str] | None = None) -> int:
                 allow_read_only=True,
                 allow_mutating=bool(args.allow_mutating_tools),
             )
-            executor = ToolExecutor(workspace_root=args.workspace, policy=policy, audit_log=audit, tools=all_tools)
+            executor = ToolExecutor(
+                workspace_root=args.workspace,
+                policy=policy,
+                audit_log=audit,
+                tools=all_tools,
+                sandbox_mode=args.sandbox_mode,
+                container_image=args.container_image,
+            )
 
             result = executor.execute(args.run_tool, tool_args, execution_gate=gate, approval=approval)
             print(f"Tool: {result.tool}")
