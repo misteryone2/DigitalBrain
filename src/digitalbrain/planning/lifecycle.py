@@ -37,9 +37,14 @@ class ExecutionGateResult:
 def evaluate_execution_gate(plan_steps: list[dict[str, Any]] | tuple[dict[str, Any], ...], warnings: tuple[str, ...] | list[str]) -> ExecutionGateResult:
     reasons: list[str] = []
     for step in plan_steps:
+        step_id = step.get("id", "?")
+        title = step.get("title", "")
         status = str(step.get("status", "pending"))
+        last_outcome = str(step.get("last_outcome", ""))
         if status == "blocked":
-            reasons.append(f"Step {step.get('id', '?')} is blocked: {step.get('title', '')}")
+            reasons.append(f"Step {step_id} is blocked: {title}")
+        if last_outcome == "failed":
+            reasons.append(f"Step {step_id} failed: {title}")
     for warning in warnings:
         reasons.append(f"Warning: {warning}")
     # dedupe while preserving order
@@ -75,7 +80,20 @@ def record_step_outcome(
             history.append(event)
             step["outcome_history"] = history
             step["last_outcome"] = normalized_outcome
-            found = {"step_id": step_id, "outcome": normalized_outcome, "reason": reason}
+            critical = bool(step.get("critical", False)) or str(step.get("status", "")) == "blocked"
+            replan_proposal = None
+            if normalized_outcome == "failed" and critical:
+                replan_proposal = {
+                    "reason": reason or f"Critical step failed: {step.get('title', step_id)}",
+                    "step_id": step_id,
+                }
+            found = {
+                "step_id": step_id,
+                "outcome": normalized_outcome,
+                "reason": reason,
+                "critical": critical,
+                "replan_proposal": replan_proposal,
+            }
         updated.append(step)
     if found is None:
         raise ValueError(f"Unknown step id: {step_id}")

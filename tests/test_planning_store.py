@@ -48,13 +48,16 @@ class SQLitePlanStoreTests(unittest.TestCase):
                 plan = store.save_plan(
                     goal="Build app",
                     status="accepted",
-                    steps=[{"id": "step-1", "title": "Do", "status": "pending"}],
+                    steps=[{"id": "step-1", "title": "Do", "status": "pending", "critical": True}],
                     source="test",
                 )
                 updated, event = store.record_step_outcome(plan.id, "step-1", "failed", reason="test failed")
                 self.assertEqual(event["outcome"], "failed")
                 self.assertEqual(updated.metadata["last_step_outcome"]["step_id"], "step-1")
                 self.assertIn("execution_gate", updated.metadata)
+                self.assertEqual(updated.metadata["execution_gate"]["status"], "needs_review")
+                self.assertIn("replan_proposal", event)
+                self.assertIsNotNone(event["replan_proposal"])
 
     def test_rejects_invalid_plan(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

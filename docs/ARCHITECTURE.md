@@ -89,8 +89,9 @@ Technologies may evolve, but independence, modularity, verifiability, and safety
 - **Context policy:** deterministic selection for facts in same subject/predicate: highest confidence, then newest, then id. Conflicts remain exposed in `knowledge_conflicts` and `context_notes`.
 - **Planning:** `PlannerProtocol` + `DeterministicPlanner` produce structured `PlanStep`s with status, dependencies, verification, `source_rule`, and explicit `alternatives`. Relevant conflicts yield warnings and `ACCEPTED_WITH_WARNINGS`; conflict-resolution steps are marked `blocked` and downstream steps depend on them. No opaque scoring/automatic alternative selection.
 - **Plan storage:** `SQLitePlanStore` (`plan_records`) stores append-only plan versions with `version`, `parent_plan_id`, `lifecycle_status`, warnings, context summary, step payloads, and metadata for replanning/history. Replanning marks previous latest plan as `superseded`.
-- **Execution gate:** deterministic gate computes `ready`/`needs_review`; blocked steps or warnings produce `needs_review` with reasons. Gate is stored in plan metadata and audited.
-- **Audit:** `AuditLog` (`audit_events`) provides append-only trace with schema versioning. Current events: `context.conflict_detected`, `plan.generated`, `plan.replanned`, `plan.execution_gate`, `goal.processed`.
+- **Execution gate:** deterministic gate computes `ready`/`needs_review`; blocked steps, warnings, or failed step outcomes produce `needs_review` with reasons. Gate is stored in plan metadata and audited.
+- **Step outcomes:** explicit outcome recording (`passed/failed/skipped`) updates step history and gate. Failed critical/blocked steps generate an explicit replan proposal in response/metadata; no automatic replanning.
+- **Audit:** `AuditLog` (`audit_events`) provides append-only trace with schema versioning. Current events: `context.conflict_detected`, `plan.generated`, `plan.replanned`, `plan.execution_gate`, `goal.processed`, `plan.lifecycle_changed` (CLI).
 
 ## Current implementation boundary
 

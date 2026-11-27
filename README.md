@@ -29,6 +29,7 @@ The project is developed incrementally. The first milestone is a small, testable
 - [x] Append-only plan version storage (`SQLitePlanStore`) with parent linkage
 - [x] Plan lifecycle status + deterministic execution gate (`needs_review` on blocked/warnings)
 - [x] Explicit step outcome recording (passed/failed/skipped) with plan metadata update
+- [x] Deterministic failure gate and explicit replan proposals for critical/blocked failed steps (no auto-replan)
 
 ## Requirements
 

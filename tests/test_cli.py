@@ -179,6 +179,25 @@ class CLITests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertIn("outcome=passed", out.getvalue())
 
+    def test_failed_critical_step_prints_replan_proposal(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            plan_db = Path(tmp) / "plans.db"
+            from digitalbrain.planning import SQLitePlanStore
+            with SQLitePlanStore(plan_db) as store:
+                plan = store.save_plan(
+                    goal="Build app",
+                    status="accepted",
+                    steps=[{"id": "step-1", "title": "Critical", "status": "pending", "critical": True}],
+                    source="test",
+                )
+            out = io.StringIO()
+            with redirect_stdout(out):
+                code = main(["--plan-db", str(plan_db), "--record-step-outcome", plan.id, "step-1", "failed", "--reason", "boom"])
+            self.assertEqual(code, 0)
+            text = out.getvalue()
+            self.assertIn("Replan proposal", text)
+            self.assertIn("not executed", text)
+
 
 if __name__ == "__main__":
     unittest.main()

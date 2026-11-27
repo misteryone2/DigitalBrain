@@ -28,6 +28,7 @@ class PlanStep:
     depends_on: tuple[str, ...] = ()
     source_rule: str = "baseline"
     alternatives: tuple[dict[str, str], ...] = ()
+    critical: bool = False
 
     def to_text(self) -> str:
         prefix = "[BLOCKED] " if self.status == StepStatus.BLOCKED else ""
@@ -71,6 +72,7 @@ class DeterministicPlanner:
             depends_on: tuple[str, ...] = (),
             source_rule: str,
             alternatives: tuple[dict[str, str], ...] = (),
+            critical: bool = False,
         ) -> PlanStep:
             nonlocal n
             step = PlanStep(
@@ -82,6 +84,7 @@ class DeterministicPlanner:
                 depends_on=depends_on,
                 source_rule=source_rule,
                 alternatives=alternatives,
+                critical=critical,
             )
             steps.append(step)
             n += 1
@@ -123,6 +126,7 @@ class DeterministicPlanner:
                 "Conflicts are resolved or explicitly accepted with recorded rationale.",
                 status=StepStatus.BLOCKED,
                 source_rule="context.knowledge_conflicts",
+                critical=True,
                 alternatives=(
                     {
                         "id": "resolve-by-source",

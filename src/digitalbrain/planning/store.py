@@ -242,6 +242,16 @@ class SQLitePlanStore:
             metadata = dict(record.metadata)
             metadata["execution_gate"] = gate.to_dict()
             metadata["last_step_outcome"] = event
+            proposal = event.get("replan_proposal")
+            if isinstance(proposal, dict):
+                proposal = {
+                    **proposal,
+                    "plan_id": plan_id,
+                    "goal": record.goal,
+                    "suggested_command": f'digitalbrain --plan-db <plan-db> --replan "{record.goal}" --reason "{proposal.get("reason", "")}"',
+                }
+                event["replan_proposal"] = proposal
+                metadata["last_replan_proposal"] = proposal
             self._connection.execute(
                 "UPDATE plan_records SET steps_json = ?, metadata_json = ? WHERE id = ?",
                 (

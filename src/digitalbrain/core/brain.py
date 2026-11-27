@@ -302,4 +302,5 @@ class DigitalBrain:
             "depends_on": list(step.depends_on),
             "source_rule": step.source_rule,
             "alternatives": [dict(a) for a in step.alternatives],
+            "critical": bool(step.critical),
         }

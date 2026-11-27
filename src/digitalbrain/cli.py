@@ -254,12 +254,24 @@ def main(argv: list[str] | None = None) -> int:
         if not args.plan_db:
             parser.error("--set-plan-lifecycle requires --plan-db")
         plan_id, lifecycle_status = args.set_plan_lifecycle
-        with SQLitePlanStore(args.plan_db) as plans:
-            try:
-                rec = plans.set_lifecycle_status(plan_id, lifecycle_status, reason=args.reason)
-            except ValueError as exc:
-                print(f"Error: {exc}")
-                return 1
+        audit = AuditLog(args.audit_db) if args.audit_db else None
+        try:
+            with SQLitePlanStore(args.plan_db) as plans:
+                try:
+                    rec = plans.set_lifecycle_status(plan_id, lifecycle_status, reason=args.reason)
+                except ValueError as exc:
+                    print(f"Error: {exc}")
+                    return 1
+            if audit is not None:
+                audit.record(
+                    "plan.lifecycle_changed",
+                    actor="cli",
+                    outcome=rec.lifecycle_status,
+                    details={"plan_id": rec.id, "reason": args.reason},
+                )
+        finally:
+            if audit is not None:
+                audit.close()
         print(f"Plan record: {rec.id}")
         print(f"Lifecycle: {rec.lifecycle_status}")
         return 0
@@ -278,6 +290,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Plan record: {rec.id}")
         print(f"Step: {event['step_id']} outcome={event['outcome']}")
         print(f"Execution gate: {gate.get('status')} executable={gate.get('executable')}")
+        proposal = event.get("replan_proposal")
+        if isinstance(proposal, dict):
+            print("Replan proposal (explicit, not executed):")
+            print(f"- reason: {proposal.get('reason')}")
+            print(f"- suggested: {proposal.get('suggested_command')}")
         return 0
 
     if args.replan:
