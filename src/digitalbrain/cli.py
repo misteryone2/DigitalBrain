@@ -276,7 +276,7 @@ def main(argv: list[str] | None = None) -> int:
         bool(args.correct_memory),
     ]
     knowledge_actions = [bool(args.add_fact), args.list_facts, args.knowledge_stats]
-    plan_actions = [args.list_plans, bool(args.get_plan), bool(args.replan), bool(args.set_plan_lifecycle), bool(args.record_step_outcome), bool(args.approve_plan_execution), args.list_approvals, bool(args.resolve_approval)]
+    plan_actions = [args.list_plans, bool(args.get_plan and not args.list_approvals), bool(args.replan), bool(args.set_plan_lifecycle), bool(args.record_step_outcome), bool(args.approve_plan_execution), args.list_approvals, bool(args.resolve_approval)]
     audit_actions = [args.list_audit]
     execution_actions = [args.list_tools, bool(args.run_tool)]
     groups = [any(memory_actions), any(knowledge_actions), any(plan_actions), any(audit_actions), any(execution_actions)]
