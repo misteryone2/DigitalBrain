@@ -64,41 +64,42 @@ class Handler(BaseHTTPRequestHandler):
         qs = parse_qs(parsed.query)
         limit = int((qs.get("limit") or ["20"])[0])
         try:
-            if parsed.path == "/health":
-                _json(self, 200, {"ok": True, "service": "digitalbrain-api"})
+            if parsed.path in {"/health", "/v1/health"}:
+                _json(self, 200, {"ok": True, "service": "digitalbrain-api", "version": "v1"})
                 return
-            if parsed.path == "/plans":
+            if parsed.path in {"/plans", "/v1/plans"}:
                 if not self.config.plan_db:
                     _json(self, 400, {"error": "DIGITALBRAIN_PLAN_DB not configured"})
                     return
                 with SQLitePlanStore(self.config.plan_db) as store:
                     plans = [p.__dict__ for p in store.list_plans(limit=limit)]
-                _json(self, 200, {"plans": plans})
+                _json(self, 200, {"plans": plans, "version": "v1"})
                 return
-            if parsed.path == "/memory":
+            if parsed.path in {"/memory", "/v1/memory"}:
                 if not self.config.memory_db:
                     _json(self, 400, {"error": "DIGITALBRAIN_MEMORY_DB not configured"})
                     return
                 with SQLiteMemoryStore(self.config.memory_db) as store:
                     recs = [r.__dict__ for r in store.list_records(limit=limit)]
-                _json(self, 200, {"memory": recs})
+                _json(self, 200, {"memory": recs, "version": "v1"})
                 return
-            if parsed.path == "/audit":
+            if parsed.path in {"/audit", "/v1/audit"}:
                 if not self.config.audit_db:
                     _json(self, 400, {"error": "DIGITALBRAIN_AUDIT_DB not configured"})
                     return
                 with AuditLog(self.config.audit_db) as store:
                     ev = [e.__dict__ for e in store.list_events(limit=limit)]
-                _json(self, 200, {"audit": ev})
+                _json(self, 200, {"audit": ev, "version": "v1"})
                 return
-            if parsed.path == "/outcomes":
+            if parsed.path in {"/outcomes", "/v1/outcomes"}:
                 if not self.config.outcomes_db:
                     _json(self, 400, {"error": "DIGITALBRAIN_OUTCOMES_DB not configured"})
                     return
                 with SQLiteOutcomeStore(self.config.outcomes_db) as store:
                     rows = [r.__dict__ for r in store.list_outcomes(limit=limit)]
                     summary = store.summary()
-                _json(self, 200, {"outcomes": rows, "summary": summary})
+                    regression = store.detect_regressions()
+                _json(self, 200, {"outcomes": rows, "summary": summary, "regression": regression, "version": "v1"})
                 return
             _json(self, 404, {"error": "not found"})
         except Exception as exc:  # noqa: BLE001

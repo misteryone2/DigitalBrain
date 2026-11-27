@@ -109,6 +109,42 @@ class SQLiteOutcomeStore:
         rate = (success / total) if total else None
         return {"total": total, "by_status": by_status, "success_rate": rate, "failures": failure}
 
+    def detect_regressions(self, *, kind: str | None = None, window: int = 20, min_samples: int = 5, drop_threshold: float = 0.2) -> dict[str, Any]:
+        """Deterministic regression signal: compare recent window vs previous window.
+
+        No autonomous action is taken; this returns observable evidence for review.
+        """
+        if window < 1 or min_samples < 1:
+            raise ValueError("window and min_samples must be >= 1")
+        rows = self.list_outcomes(kind=kind, limit=window * 2)
+        recent = rows[:window]
+        previous = rows[window : window * 2]
+
+        def _rate(items: list[OutcomeRecord]) -> float | None:
+            if not items:
+                return None
+            success = sum(1 for r in items if r.status in {"passed", "ok", "executed"})
+            return success / len(items)
+
+        recent_rate = _rate(recent)
+        prev_rate = _rate(previous)
+        enough = len(recent) >= min_samples and len(previous) >= min_samples
+        drop = (prev_rate - recent_rate) if (recent_rate is not None and prev_rate is not None) else None
+        regressed = bool(enough and drop is not None and drop >= drop_threshold)
+        return {
+            "kind": kind,
+            "window": window,
+            "min_samples": min_samples,
+            "drop_threshold": drop_threshold,
+            "recent_count": len(recent),
+            "previous_count": len(previous),
+            "recent_success_rate": recent_rate,
+            "previous_success_rate": prev_rate,
+            "drop": drop,
+            "enough_samples": enough,
+            "regressed": regressed,
+        }
+
     @staticmethod
     def _row(r: sqlite3.Row) -> OutcomeRecord:
         return OutcomeRecord(

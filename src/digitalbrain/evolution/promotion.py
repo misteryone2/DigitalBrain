@@ -72,8 +72,17 @@ class SQLitePromotionStore:
 
     def record(self, *, artifact: str, from_env: str, to_env: str, status: str, reason: str, metadata: dict[str, Any] | None = None) -> PromotionRecord:
         rec = PromotionRecord(uuid.uuid4().hex, datetime.now(timezone.utc).isoformat(), artifact, from_env, to_env, status, reason, metadata or {})
-        if rec.from_env not in {"lab", "validation", "production"} or rec.to_env not in {"lab", "validation", "production"}:
+        allowed_envs = {"lab", "validation", "production"}
+        if rec.from_env not in allowed_envs or rec.to_env not in allowed_envs:
             raise ValueError("env must be lab|validation|production")
+        allowed_status = {"proposed", "approved", "rejected", "promoted", "rolled_back", "failed"}
+        if rec.status not in allowed_status:
+            raise ValueError(f"status must be one of {sorted(allowed_status)}")
+        # Simple guardrail: promotion to production requires explicit approval record in metadata.
+        if rec.to_env == "production" and rec.status == "promoted":
+            approved = bool((rec.metadata or {}).get("human_approval", False))
+            if not approved:
+                raise ValueError("Promotion to production requires metadata.human_approval=true (no autonomous promotion).")
         with self._conn:
             self._conn.execute(
                 "INSERT INTO promotions(id,created_at,artifact,from_env,to_env,status,reason,metadata_json) VALUES (?,?,?,?,?,?,?,?)",
