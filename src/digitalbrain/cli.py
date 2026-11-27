@@ -241,6 +241,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to signed/central sandbox policy JSON. Env: DIGITALBRAIN_SANDBOX_POLICY_FILE.",
     )
     parser.add_argument(
+        "--attestation-path",
+        help="Path to image attestation JSON. Env: DIGITALBRAIN_ATTESTATION_PATH.",
+    )
+    parser.add_argument(
         "--list-approvals",
         action="store_true",
         help="List execution approvals from --plan-db (optionally --get-plan/--approval-state filters).",
@@ -580,6 +584,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.list_tools or args.run_tool:
         if args.sandbox_policy_file:
             os.environ["DIGITALBRAIN_SANDBOX_POLICY_FILE"] = args.sandbox_policy_file
+        if args.attestation_path:
+            os.environ["DIGITALBRAIN_ATTESTATION_PATH"] = args.attestation_path
         sandbox_policy = SandboxPolicyConfig.from_env_and_file()
         audit = AuditLog(args.audit_db) if args.audit_db else None
         try:
