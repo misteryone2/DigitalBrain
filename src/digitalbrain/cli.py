@@ -158,7 +158,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--run-tool",
-        help="Run an allowlisted read-only tool by name.",
+        help="Run an allowlisted tool by name (read-only by default; mutating requires explicit flags and approval).",
     )
     parser.add_argument(
         "--tool-args",
@@ -569,15 +569,6 @@ def main(argv: list[str] | None = None) -> int:
             executor = ToolExecutor(workspace_root=args.workspace, policy=policy, audit_log=audit, tools=all_tools)
 
             result = executor.execute(args.run_tool, tool_args, execution_gate=gate, approval=approval)
-            if result.ok and result.allowed and approval and isinstance(approval, dict) and args.plan_db and args.audit_db:
-                with AuditLog(args.audit_db) as audit_log:
-                    if approval.get("consumed_at") or approval.get("plan_id"):
-                        audit_log.record(
-                            "plan.execution_approval_consumed",
-                            actor="cli",
-                            outcome="consumed",
-                            details={"plan_id": approval.get("plan_id"), "tool": result.tool},
-                        )
             print(f"Tool: {result.tool}")
             print(f"Allowed: {result.allowed}")
             print(f"OK: {result.ok}")
