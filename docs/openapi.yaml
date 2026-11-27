@@ -41,11 +41,13 @@ paths:
       summary: List outcomes, summary, regression signal
       responses:
         '200': { description: OK }
+        '403': { description: Forbidden by scope }
   /v1/promotions:
     get:
       summary: List promotion/rollback records
       responses:
         '200': { description: OK }
+        '403': { description: Forbidden by scope }
 components:
   securitySchemes:
     bearerAuth:

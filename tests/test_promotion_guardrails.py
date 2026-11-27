@@ -11,8 +11,11 @@ class PromotionGuardrailTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     store.record(artifact='a', from_env='validation', to_env='production', status='promoted', reason='auto', metadata={})
                 store.record(artifact='a', from_env='validation', to_env='production', status='proposed', reason='candidate', metadata={'human_approval': True})
-                store.record(artifact='a', from_env='validation', to_env='production', status='approved', reason='approved', metadata={'human_approval': True})
-                rec = store.record(artifact='a', from_env='validation', to_env='production', status='promoted', reason='promoted', metadata={'human_approval': True})
+                gate = {'passed': True, 'evidence': {'regression': False}}
+                with self.assertRaises(ValueError):
+                    store.record(artifact='a', from_env='validation', to_env='production', status='approved', reason='approved', metadata={'human_approval': True})
+                store.record(artifact='a', from_env='validation', to_env='production', status='approved', reason='approved', metadata={'human_approval': True, 'evaluation_gate': gate})
+                rec = store.record(artifact='a', from_env='validation', to_env='production', status='promoted', reason='promoted', metadata={'human_approval': True, 'evaluation_gate': gate})
                 self.assertEqual(rec.status, 'promoted')
 
 if __name__=='__main__':

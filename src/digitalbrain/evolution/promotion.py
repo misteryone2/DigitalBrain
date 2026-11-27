@@ -90,6 +90,9 @@ class SQLitePromotionStore:
         if rec.to_env == "production" and rec.status in {"approved", "promoted"}:
             if not bool((rec.metadata or {}).get("human_approval", False)):
                 raise ValueError("Production promotion requires metadata.human_approval=true (no autonomous promotion).")
+            gate = (rec.metadata or {}).get("evaluation_gate")
+            if not isinstance(gate, dict) or not gate.get("passed", False):
+                raise ValueError("Production promotion requires metadata.evaluation_gate.passed=true with evidence.")
 
         with self._conn:
             self._conn.execute(

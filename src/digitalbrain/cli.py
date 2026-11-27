@@ -241,6 +241,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to signed/central sandbox policy JSON. Env: DIGITALBRAIN_SANDBOX_POLICY_FILE.",
     )
     parser.add_argument(
+        "--validate-sandbox-policy",
+        metavar="PATH",
+        help="Validate sandbox policy file and print deterministic result; no execution.",
+    )
+    parser.add_argument(
         "--attestation-path",
         help="Path to image attestation JSON. Env: DIGITALBRAIN_ATTESTATION_PATH.",
     )
@@ -251,6 +256,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--compare-outcomes", nargs=3, metavar=("KIND", "BASELINE_REF", "CANDIDATE_REF"), help="Deterministic baseline vs candidate outcome comparison.")
     parser.add_argument("--promotion-db", help="SQLite file for environment promotion records (M6 baseline).")
     parser.add_argument("--record-promotion", nargs=5, metavar=("ARTIFACT", "FROM", "TO", "STATUS", "REASON"), help="Record promotion/rollback event.")
+    parser.add_argument("--promotion-metadata", default="{}", help="JSON metadata for --record-promotion (e.g. human_approval/evaluation_gate).")
     parser.add_argument("--list-promotions", action="store_true", help="List promotion records from --promotion-db.")
     parser.add_argument("--serve-api", action="store_true", help="Serve read-only authenticated API (M7 baseline).")
     parser.add_argument("--api-host", default="127.0.0.1", help="API host (default 127.0.0.1).")
@@ -345,8 +351,9 @@ def main(argv: list[str] | None = None) -> int:
     execution_actions = [args.list_tools, bool(args.run_tool)]
     outcome_actions = [bool(args.record_outcome), bool(args.outcomes_summary), bool(args.outcomes_regressions), bool(args.compare_outcomes)]
     promotion_actions = [bool(args.record_promotion), bool(args.list_promotions)]
+    policy_actions = [bool(args.validate_sandbox_policy)]
     api_actions = [bool(args.serve_api)]
-    groups = [any(memory_actions), any(knowledge_actions), any(plan_actions), any(audit_actions), any(execution_actions), any(outcome_actions), any(promotion_actions), any(api_actions)]
+    groups = [any(memory_actions), any(knowledge_actions), any(plan_actions), any(audit_actions), any(execution_actions), any(outcome_actions), any(promotion_actions), any(policy_actions), any(api_actions)]
     if sum(1 for a in memory_actions if a) > 1:
         parser.error(
             "Use only one of --list-memory, --memory-stats, --get-memory, or --correct-memory"
@@ -369,6 +376,31 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("Approval commands require --plan-db")
     if sum(groups) > 1:
         parser.error("Use memory, knowledge, plan, audit, execution, outcome, promotion, or API commands separately")
+
+    if args.validate_sandbox_policy:
+        import json as _json
+        from digitalbrain.execution.sandbox_policy import SandboxPolicyConfig
+        old_file = os.environ.get("DIGITALBRAIN_SANDBOX_POLICY_FILE")
+        try:
+            os.environ["DIGITALBRAIN_SANDBOX_POLICY_FILE"] = args.validate_sandbox_policy
+            cfg = SandboxPolicyConfig.from_env_and_file()
+            print("ok: true")
+            print(f"policy_source: {cfg.policy_source}")
+            print(f"mode: {cfg.mode}")
+            print(f"require_image_digest: {cfg.require_image_digest}")
+            print(f"require_seccomp: {cfg.require_seccomp}")
+            print(f"require_apparmor: {cfg.require_apparmor}")
+            print(f"require_container_for_mutating: {cfg.require_container_for_mutating}")
+            return 0
+        except Exception as exc:  # noqa: BLE001
+            print("ok: false")
+            print(f"error: {exc}")
+            return 1
+        finally:
+            if old_file is None:
+                os.environ.pop("DIGITALBRAIN_SANDBOX_POLICY_FILE", None)
+            else:
+                os.environ["DIGITALBRAIN_SANDBOX_POLICY_FILE"] = old_file
 
     if args.record_outcome:
         if not args.outcomes_db:
@@ -417,8 +449,12 @@ def main(argv: list[str] | None = None) -> int:
         artifact, from_env, to_env, status, reason = args.record_promotion
         from digitalbrain.evolution import SQLitePromotionStore
         try:
+            promotion_meta = json.loads(args.promotion_metadata)
+            if not isinstance(promotion_meta, dict):
+                raise ValueError("--promotion-metadata must be a JSON object")
+            promotion_meta.setdefault("source", "cli")
             with SQLitePromotionStore(args.promotion_db) as store:
-                rec = store.record(artifact=artifact, from_env=from_env, to_env=to_env, status=status, reason=reason, metadata={"source": "cli"})
+                rec = store.record(artifact=artifact, from_env=from_env, to_env=to_env, status=status, reason=reason, metadata=promotion_meta)
         except ValueError as exc:
             print(f"Error: {exc}")
             return 1
