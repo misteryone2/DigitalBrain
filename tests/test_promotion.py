@@ -16,7 +16,8 @@ class PromotionTests(unittest.TestCase):
                 rec = store.record(artifact="plan:1", from_env="lab", to_env="validation", status="approved", reason="tests passed")
                 self.assertEqual(rec.to_env, "validation")
                 recs = store.list()
-                self.assertEqual(len(recs), 1)
+                self.assertEqual(len(recs), 2)
+                self.assertEqual(recs[0].status, "approved")
 
     def test_invalid_env(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

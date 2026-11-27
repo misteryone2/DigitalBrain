@@ -85,8 +85,8 @@ class SQLitePromotionStore:
         if rec.status == "approved" and "proposed" not in statuses:
             raise ValueError("Promotion must be proposed before approval.")
         if rec.status == "promoted":
-            if "approved" not in statuses and not bool((rec.metadata or {}).get("human_approval", False)):
-                raise ValueError("Promotion requires prior approved record or explicit human_approval metadata.")
+            if "approved" not in statuses:
+                raise ValueError("Promotion requires prior approved record.")
         if rec.to_env == "production" and rec.status in {"approved", "promoted"}:
             if not bool((rec.metadata or {}).get("human_approval", False)):
                 raise ValueError("Production promotion requires metadata.human_approval=true (no autonomous promotion).")
