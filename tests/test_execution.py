@@ -5,6 +5,7 @@ from pathlib import Path
 
 from digitalbrain.core.audit import AuditLog
 from digitalbrain.execution import ExecutionPolicy, ToolExecutor
+from digitalbrain.execution.tools import default_tools
 
 
 class TestExecution(unittest.TestCase):
@@ -86,7 +87,6 @@ class TestExecution(unittest.TestCase):
     def test_mutating_tool_requires_ready_gate_and_approval(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            from digitalbrain.execution import default_tools
             all_tools = default_tools(root)
             policy = ExecutionPolicy(allowed_tools=set(all_tools.keys()), allow_mutating=True)
             ex = ToolExecutor(workspace_root=root, policy=policy, tools=all_tools)
@@ -109,14 +109,43 @@ class TestExecution(unittest.TestCase):
             self.assertFalse(denied_approval.ok)
             self.assertIn("approval", denied_approval.policy_reason.lower())
 
+            denied_scope = ex.execute(
+                "write_file",
+                {"path": "x.txt", "content": "hi", "overwrite": True},
+                execution_gate={"status": "ready"},
+                approval={"approved": True, "tool_name": "other_tool"},
+            )
+            self.assertFalse(denied_scope.ok)
+            self.assertIn("scoped", denied_scope.policy_reason.lower())
+
             ok = ex.execute(
                 "write_file",
                 {"path": "x.txt", "content": "hi", "overwrite": True},
                 execution_gate={"status": "ready"},
-                approval={"approved": True},
+                approval={"approved": True, "tool_name": "write_file"},
             )
             self.assertTrue(ok.ok)
             self.assertEqual((root / "x.txt").read_text(encoding="utf-8"), "hi")
+
+    def test_tool_timeout_is_enforced(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            from digitalbrain.execution.tools import ToolSpec
+            ex = ToolExecutor(
+                workspace_root=tmp,
+                tools={
+                    "slow": ToolSpec(
+                        name="slow",
+                        description="slow",
+                        read_only=True,
+                        risk_class="none",
+                        timeout_s=0.01,
+                        handler=lambda: __import__("time").sleep(0.1) or {"ok": True},
+                    )
+                },
+            )
+            res = ex.execute("slow", {})
+            self.assertFalse(res.ok)
+            self.assertIn("timed out", (res.error or "").lower())
 
 
 if __name__ == "__main__":

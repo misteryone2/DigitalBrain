@@ -180,6 +180,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Explicitly approve a ready plan for future mutating execution (no auto-execution). Requires --plan-db.",
     )
     parser.add_argument(
+        "--approve-tool",
+        help="Optional tool name to scope --approve-plan-execution to a specific tool.",
+    )
+    parser.add_argument(
+        "--approve-risk-class",
+        help="Optional risk class label recorded with --approve-plan-execution.",
+    )
+    parser.add_argument(
         "--allow-mutating-tools",
         action="store_true",
         help="Enable mutating tools in policy for this command. Mutating tools still require ready gate and explicit plan approval.",
@@ -353,7 +361,13 @@ def main(argv: list[str] | None = None) -> int:
         try:
             with SQLitePlanStore(args.plan_db) as plans:
                 try:
-                    rec = plans.approve_execution(args.approve_plan_execution, reason=args.reason, actor="cli")
+                    rec = plans.approve_execution(
+                        args.approve_plan_execution,
+                        reason=args.reason,
+                        actor="cli",
+                        tool_name=args.approve_tool,
+                        risk_class=args.approve_risk_class,
+                    )
                 except ValueError as exc:
                     print(f"Error: {exc}")
                     return 1
@@ -362,7 +376,12 @@ def main(argv: list[str] | None = None) -> int:
                     "plan.execution_approved",
                     actor="cli",
                     outcome="approved",
-                    details={"plan_id": rec.id, "reason": args.reason},
+                    details={
+                        "plan_id": rec.id,
+                        "reason": args.reason,
+                        "tool_name": args.approve_tool,
+                        "risk_class": args.approve_risk_class,
+                    },
                 )
         finally:
             if audit is not None:
@@ -373,6 +392,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Lifecycle: {rec.lifecycle_status}")
         print(f"Execution gate: {gate.get('status')} executable={gate.get('executable')}")
         print(f"Approved: {bool(approval.get('approved', False))}")
+        if approval.get("tool_name"):
+            print(f"Approved tool: {approval.get('tool_name')}")
+        if approval.get("risk_class"):
+            print(f"Risk class: {approval.get('risk_class')}")
         return 0
 
     if args.replan:

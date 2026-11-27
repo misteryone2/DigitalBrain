@@ -224,8 +224,19 @@ class SQLitePlanStore:
             raise RuntimeError("Plan not found after update")
         return record
 
-    def approve_execution(self, plan_id: str, *, reason: str | None = None, actor: str = "cli") -> PlanRecord:
-        """Record explicit execution approval. Does not execute tools automatically."""
+    def approve_execution(
+        self,
+        plan_id: str,
+        *,
+        reason: str | None = None,
+        actor: str = "cli",
+        tool_name: str | None = None,
+        risk_class: str | None = None,
+    ) -> PlanRecord:
+        """Record explicit execution approval. Does not execute tools automatically.
+
+        Approval is scoped to plan, and optionally to a tool/risk class for finer control.
+        """
         with self._connection:
             row = self._get_row(plan_id)
             if row is None:
@@ -237,13 +248,21 @@ class SQLitePlanStore:
                     f"Plan {plan_id} is not ready for approval: {gate.status}; reasons={list(gate.reasons)}"
                 )
             metadata = dict(record.metadata)
-            metadata["execution_approval"] = {
+            approval = {
                 "approved": True,
                 "approved_at": datetime.now(timezone.utc).isoformat(),
                 "actor": actor,
                 "reason": reason,
                 "gate_status": gate.status,
+                "tool_name": tool_name,
+                "risk_class": risk_class,
             }
+            metadata["execution_approval"] = approval
+            approvals = metadata.get("execution_approvals", [])
+            if not isinstance(approvals, list):
+                approvals = [approvals]
+            approvals.append(approval)
+            metadata["execution_approvals"] = approvals
             self._connection.execute(
                 "UPDATE plan_records SET metadata_json = ? WHERE id = ?",
                 (json.dumps(metadata, sort_keys=True, ensure_ascii=False), plan_id),

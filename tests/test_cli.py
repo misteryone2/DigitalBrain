@@ -253,7 +253,7 @@ class CLITests(unittest.TestCase):
 
             # Approve then run
             with redirect_stdout(io.StringIO()):
-                code = main(["--plan-db", str(plan_db), "--approve-plan-execution", plan.id, "--reason", "ok"])
+                code = main(["--plan-db", str(plan_db), "--approve-plan-execution", plan.id, "--reason", "ok", "--approve-tool", "write_file", "--approve-risk-class", "low"])
             self.assertEqual(code, 0)
 
             out = io.StringIO()

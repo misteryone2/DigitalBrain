@@ -46,10 +46,12 @@ This roadmap turns the [founding vision](VISION.md) into incremental, verifiable
 - [x] Permission model baseline: default-deny allowlist, mutating tools blocked by default
 - [x] Execution gate awareness: read-only inspection allowed with `needs_review` reason; mutating requires `ready`
 - [x] Explicit approval model for mutating execution (`plan.execution_approved`, metadata; no auto-execution)
+- [x] Scoped approval metadata (optional tool/risk class) and policy enforcement
 - [x] Controlled mutating tool proof: `write_file` registry entry, policy-gated, CLI opt-in + approval + ready gate required
+- [x] In-process sandbox hardening: per-tool timeout, arg/output limits, symlink-path rejection
 - [x] Audit logs for tool actions/decisions (`tool.requested/allowed/denied/executed/failed`) and approval events
 - [x] CLI tool inspection/execution commands (`--list-tools`, `--run-tool`, `--approve-plan-execution`, `--allow-mutating-tools`)
-- [ ] Sandboxed execution with resource limits/timeouts/process isolation
+- [ ] OS/process-level sandbox isolation and resource quotas
 - [ ] Broader mutating tool set with per-tool risk classes and human approval workflow
 
 ## M5 — Learning and metacognition

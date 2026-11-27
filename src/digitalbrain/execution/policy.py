@@ -65,4 +65,8 @@ class ExecutionPolicy:
             return PolicyDecision(False, f"Tool '{tool_name}' is mutating; execution gate is {gate_status}.")
         if not approved:
             return PolicyDecision(False, f"Tool '{tool_name}' is mutating; explicit approval required.")
+
+        approved_tool = (approval or {}).get("tool_name")
+        if approved_tool and approved_tool != tool_name:
+            return PolicyDecision(False, f"Approval is scoped to tool '{approved_tool}', not '{tool_name}'.")
         return PolicyDecision(True, "Allowed mutating tool by explicit approval and ready gate.")

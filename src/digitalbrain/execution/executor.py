@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from queue import Empty, Queue
+from threading import Thread
 from typing import Any
 
 from digitalbrain.core.audit import AuditLog
@@ -49,7 +51,14 @@ class ToolExecutor:
 
     def list_tools(self) -> list[dict[str, Any]]:
         return [
-            {"name": t.name, "description": t.description, "read_only": t.read_only}
+            {
+                "name": t.name,
+                "description": t.description,
+                "read_only": t.read_only,
+                "risk_class": t.risk_class,
+                "timeout_s": t.timeout_s,
+                "limits": dict(t.limits),
+            }
             for t in self.tools.values()
         ]
 
@@ -71,6 +80,7 @@ class ToolExecutor:
                 "arguments": args,
                 "execution_gate": execution_gate,
                 "approved": bool((approval or {}).get("approved", False)),
+                "risk_class": getattr(spec, "risk_class", None),
             },
         )
         if spec is None:
@@ -87,15 +97,43 @@ class ToolExecutor:
             self._audit("tool.denied", "denied", {"tool": tool_name, "reason": decision.reason, "arguments": args})
             return ToolExecutionResult(tool_name, False, False, None, decision.reason, decision.reason)
 
-        self._audit("tool.allowed", "allowed", {"tool": tool_name, "reason": decision.reason})
+        self._audit("tool.allowed", "allowed", {"tool": tool_name, "reason": decision.reason, "risk_class": spec.risk_class})
         try:
-            output = spec.handler(**args)
+            output = self._run_with_timeout(spec, args)
+        except TimeoutError as exc:
+            self._audit("tool.failed", "failed", {"tool": tool_name, "error": str(exc), "timeout_s": spec.timeout_s})
+            return ToolExecutionResult(tool_name, True, False, None, str(exc), decision.reason)
         except Exception as exc:  # noqa: BLE001 - boundary for tool failures
             self._audit("tool.failed", "failed", {"tool": tool_name, "error": str(exc)})
             return ToolExecutionResult(tool_name, True, False, None, str(exc), decision.reason)
 
-        self._audit("tool.executed", "ok", {"tool": tool_name, "output_keys": sorted(output.keys())})
+        self._audit("tool.executed", "ok", {"tool": tool_name, "output_keys": sorted(output.keys()), "risk_class": spec.risk_class})
         return ToolExecutionResult(tool_name, True, True, output, None, decision.reason)
+
+    @staticmethod
+    def _run_with_timeout(spec: ToolSpec, args: dict[str, Any]) -> dict[str, Any]:
+        q: Queue[tuple[bool, Any]] = Queue(maxsize=1)
+
+        def target() -> None:
+            try:
+                q.put((True, spec.handler(**args)))
+            except Exception as exc:  # noqa: BLE001
+                q.put((False, exc))
+
+        thread = Thread(target=target, daemon=True, name=f"tool-{spec.name}")
+        thread.start()
+        thread.join(timeout=max(0.1, float(spec.timeout_s)))
+        if thread.is_alive():
+            raise TimeoutError(f"Tool '{spec.name}' timed out after {spec.timeout_s}s.")
+        try:
+            ok, payload = q.get_nowait()
+        except Empty as exc:  # pragma: no cover
+            raise RuntimeError(f"Tool '{spec.name}' finished without result.") from exc
+        if ok:
+            if not isinstance(payload, dict):
+                raise TypeError("Tool handler must return a dict.")
+            return payload
+        raise payload
 
     def _audit(self, event_type: str, outcome: str, details: dict[str, Any]) -> None:
         if self.audit is not None:
