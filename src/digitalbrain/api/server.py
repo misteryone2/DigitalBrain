@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import asdict, is_dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -76,7 +77,7 @@ class Handler(BaseHTTPRequestHandler):
                     _json(self, 400, {"error": "DIGITALBRAIN_PLAN_DB not configured"})
                     return
                 with SQLitePlanStore(self.config.plan_db) as store:
-                    plans = [p.__dict__ for p in store.list_plans(limit=limit)]
+                    plans = [asdict(p) if is_dataclass(p) else p.__dict__ for p in store.list_plans(limit=limit)]
                 _json(self, 200, {"plans": plans, "version": "v1"})
                 return
             if parsed.path in {"/memory", "/v1/memory"}:
@@ -84,7 +85,7 @@ class Handler(BaseHTTPRequestHandler):
                     _json(self, 400, {"error": "DIGITALBRAIN_MEMORY_DB not configured"})
                     return
                 with SQLiteMemoryStore(self.config.memory_db) as store:
-                    recs = [r.__dict__ for r in store.list_records(limit=limit)]
+                    recs = [asdict(r) if is_dataclass(r) else r.__dict__ for r in store.list_records(limit=limit)]
                 _json(self, 200, {"memory": recs, "version": "v1"})
                 return
             if parsed.path in {"/audit", "/v1/audit"}:
@@ -92,7 +93,7 @@ class Handler(BaseHTTPRequestHandler):
                     _json(self, 400, {"error": "DIGITALBRAIN_AUDIT_DB not configured"})
                     return
                 with AuditLog(self.config.audit_db) as store:
-                    ev = [e.__dict__ for e in store.list_events(limit=limit)]
+                    ev = [asdict(e) if is_dataclass(e) else e.__dict__ for e in store.list_events(limit=limit)]
                 _json(self, 200, {"audit": ev, "version": "v1"})
                 return
             if parsed.path in {"/outcomes", "/v1/outcomes"}:
@@ -100,7 +101,7 @@ class Handler(BaseHTTPRequestHandler):
                     _json(self, 400, {"error": "DIGITALBRAIN_OUTCOMES_DB not configured"})
                     return
                 with SQLiteOutcomeStore(self.config.outcomes_db) as store:
-                    rows = [r.__dict__ for r in store.list_outcomes(limit=limit)]
+                    rows = [asdict(r) if is_dataclass(r) else r.__dict__ for r in store.list_outcomes(limit=limit)]
                     summary = store.summary()
                     regression = store.detect_regressions()
                 _json(self, 200, {"outcomes": rows, "summary": summary, "regression": regression, "version": "v1"})
@@ -110,7 +111,7 @@ class Handler(BaseHTTPRequestHandler):
                     _json(self, 400, {"error": "DIGITALBRAIN_PROMOTION_DB not configured"})
                     return
                 with SQLitePromotionStore(self.config.promotion_db) as store:
-                    rows = [r.__dict__ for r in store.list(limit=limit)]
+                    rows = [asdict(r) if is_dataclass(r) else r.__dict__ for r in store.list(limit=limit)]
                 _json(self, 200, {"promotions": rows, "version": "v1"})
                 return
             _json(self, 404, {"error": "not found"})
