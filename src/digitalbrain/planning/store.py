@@ -234,6 +234,7 @@ class SQLitePlanStore:
         actor: str = "cli",
         tool_name: str | None = None,
         risk_class: str | None = None,
+        expires_at: str | None = None,
     ) -> PlanRecord:
         """Record explicit execution approval. Does not execute tools automatically.
 
@@ -250,6 +251,7 @@ class SQLitePlanStore:
                     f"Plan {plan_id} is not ready for approval: {gate.status}; reasons={list(gate.reasons)}"
                 )
             metadata = dict(record.metadata)
+            exp_norm = self._normalize_expires_at(expires_at) if expires_at else None
             approval = {
                 "approved": True,
                 "approved_at": datetime.now(timezone.utc).isoformat(),
@@ -259,6 +261,7 @@ class SQLitePlanStore:
                 "tool_name": tool_name,
                 "risk_class": risk_class,
                 "plan_id": plan_id,
+                "expires_at": exp_norm,
                 "consumed_at": None,
                 "consumed_by_tool": None,
             }
@@ -309,6 +312,18 @@ class SQLitePlanStore:
                     raise ValueError("Approval already consumed.")
                 if item.get("reserved_at") and not item.get("finalized_at"):
                     raise ValueError("Approval already reserved.")
+                exp = item.get("expires_at")
+                if exp:
+                    try:
+                        exp_dt = datetime.fromisoformat(str(exp).replace("Z", "+00:00"))
+                        if exp_dt.tzinfo is None:
+                            exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+                        if datetime.now(timezone.utc) >= exp_dt:
+                            raise ValueError("Approval has expired.")
+                    except ValueError as exc:
+                        if "expired" in str(exc).lower():
+                            raise
+                        raise ValueError("Approval has invalid expires_at.") from exc
                 item["reserved_at"] = now
                 item["reserved_by_tool"] = tool_name
                 item["execution_state"] = "reserved"
@@ -501,6 +516,19 @@ class SQLitePlanStore:
             "UPDATE plan_records SET lifecycle_status = ?, metadata_json = ? WHERE id = ?",
             (lifecycle_status, json.dumps(metadata, sort_keys=True, ensure_ascii=False), plan_id),
         )
+
+    @staticmethod
+    def _normalize_expires_at(expires_at: str) -> str:
+        raw = expires_at.strip()
+        if not raw:
+            raise ValueError("expires_at must not be empty.")
+        try:
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("expires_at must be ISO-8601 datetime.") from exc
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc).isoformat()
 
     def _get_row(self, plan_id: str) -> sqlite3.Row | None:
         return self._connection.execute("SELECT * FROM plan_records WHERE id = ?", (plan_id,)).fetchone()

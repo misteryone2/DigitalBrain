@@ -152,6 +152,15 @@ class TestExecution(unittest.TestCase):
             self.assertFalse(denied_consumed.ok)
             self.assertIn("consumed", denied_consumed.policy_reason.lower())
 
+            denied_expired = ex.execute(
+                "write_file",
+                {"path": "z.txt", "content": "hi", "overwrite": True},
+                execution_gate={"status": "ready"},
+                approval={"approved": True, "tool_name": "write_file", "risk_class": "low", "expires_at": "2000-01-01T00:00:00+00:00"},
+            )
+            self.assertFalse(denied_expired.ok)
+            self.assertIn("expired", denied_expired.policy_reason.lower())
+
     def test_mutating_tool_reserves_and_finalizes_approval(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

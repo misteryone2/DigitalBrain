@@ -7,6 +7,7 @@ blocked unless explicitly enabled by policy and approved with a ready execution 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 
@@ -77,6 +78,16 @@ class ExecutionPolicy:
                 False,
                 f"Approval risk class '{approved_risk}' does not match tool risk '{tool_risk_class}'.",
             )
+        expires_at = (approval or {}).get("expires_at")
+        if expires_at:
+            try:
+                exp = datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
+                if exp.tzinfo is None:
+                    exp = exp.replace(tzinfo=timezone.utc)
+                if datetime.now(timezone.utc) >= exp:
+                    return PolicyDecision(False, "Execution approval has expired.")
+            except ValueError:
+                return PolicyDecision(False, "Execution approval has invalid expires_at.")
         if (approval or {}).get("reserved_at") and not (approval or {}).get("finalized_at"):
             return PolicyDecision(False, "Execution approval is already reserved.")
         if (approval or {}).get("consumed_at"):

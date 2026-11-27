@@ -194,6 +194,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional risk class label recorded with --approve-plan-execution.",
     )
     parser.add_argument(
+        "--approve-expires-at",
+        help="Optional ISO-8601 expiration for --approve-plan-execution (UTC recommended).",
+    )
+    parser.add_argument(
         "--allow-mutating-tools",
         action="store_true",
         help="Enable mutating tools in policy for this command. Mutating tools still require ready gate and explicit plan approval.",
@@ -391,6 +395,7 @@ def main(argv: list[str] | None = None) -> int:
                         actor="cli",
                         tool_name=args.approve_tool,
                         risk_class=args.approve_risk_class,
+                        expires_at=args.approve_expires_at,
                     )
                 except ValueError as exc:
                     print(f"Error: {exc}")
@@ -405,6 +410,7 @@ def main(argv: list[str] | None = None) -> int:
                         "reason": args.reason,
                         "tool_name": args.approve_tool,
                         "risk_class": args.approve_risk_class,
+                        "expires_at": args.approve_expires_at,
                     },
                 )
         finally:
@@ -420,6 +426,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Approved tool: {approval.get('tool_name')}")
         if approval.get("risk_class"):
             print(f"Risk class: {approval.get('risk_class')}")
+        if approval.get("expires_at"):
+            print(f"Expires at: {approval.get('expires_at')}")
         return 0
 
     if args.list_approvals:

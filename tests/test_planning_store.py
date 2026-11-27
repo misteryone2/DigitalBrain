@@ -82,10 +82,11 @@ class SQLitePlanStoreTests(unittest.TestCase):
                     steps=[{"id": "step-1", "title": "Do", "status": "pending"}],
                     source="test",
                 )
-                approved = store.approve_execution(ready.id, reason="ok", actor="test", tool_name="write_file", risk_class="low")
+                approved = store.approve_execution(ready.id, reason="ok", actor="test", tool_name="write_file", risk_class="low", expires_at="2099-01-01T00:00:00Z")
                 self.assertEqual(approved.lifecycle_status, "approved_for_execution")
                 self.assertTrue(approved.metadata["execution_approval"]["approved"])
                 self.assertEqual(approved.metadata["execution_approval"]["tool_name"], "write_file")
+                self.assertIn("2099-01-01", approved.metadata["execution_approval"]["expires_at"])
 
     def test_consume_execution_approval_single_use(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -140,6 +141,21 @@ class SQLitePlanStoreTests(unittest.TestCase):
                 rec = store.finalize_execution_approval(plan.id, approved_at=at, tool_name="write_file", risk_class="low", ok=False, error="manual", actor="admin", resolution="cancelled")
                 self.assertEqual(rec.metadata["execution_approval"]["execution_state"], "cancelled")
                 self.assertEqual(rec.metadata["execution_approval"]["finalized_by"], "admin")
+
+    def test_expired_approval_cannot_be_reserved(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "plans.db"
+            with SQLitePlanStore(db) as store:
+                plan = store.save_plan(
+                    goal="Ready",
+                    status="accepted",
+                    steps=[{"id": "step-1", "title": "Do", "status": "pending"}],
+                    source="test",
+                )
+                approved = store.approve_execution(plan.id, reason="ok", tool_name="write_file", risk_class="low", expires_at="2000-01-01T00:00:00Z")
+                at = approved.metadata["execution_approval"]["approved_at"]
+                with self.assertRaises(ValueError):
+                    store.reserve_execution_approval(plan.id, approved_at=at, tool_name="write_file", risk_class="low")
 
     def test_rejects_invalid_plan(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
