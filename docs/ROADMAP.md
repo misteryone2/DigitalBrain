@@ -63,17 +63,20 @@ This roadmap turns the [founding vision](VISION.md) into incremental, verifiable
 - [x] Outcome recording and evaluation (`SQLiteOutcomeStore`, CLI record/summary)
 - [x] Capability and error tracking baseline (`learning.metacognition.capability_report`)
 - [x] Performance metrics summary (deterministic, from recorded outcomes)
+- [x] Regression detection baseline (`detect_regressions`, CLI `--outcomes-regressions`, API includes regression signal)
 - [ ] Strategy/behavior updates based on evidence (no auto-modification of code/prompt/policy without audit/approval)
-- [ ] Regression detection across baselines/candidates
+- [ ] Baseline/candidate comparison workflows
 
 ## M6 — Controlled evolution
 - [x] Environment promotion/rollback records (`lab/validation/production`, SQLite promotion store, CLI)
+- [x] Promotion guardrail: production `promoted` requires `metadata.human_approval=true` (no autonomous promotion)
 - [ ] Isolated candidate workspaces and execution isolation for experiments
-- [ ] Baseline benchmarks, candidate comparison, automated rollback triggers
-- [ ] Human approval for promotion and high-impact changes (policy-enforced)
+- [ ] Baseline benchmarks, candidate comparison, automated rollback triggers (audit-only/approved)
+- [ ] Human approval for promotion and high-impact changes (policy-enforced end-to-end)
 
 ## M7 — Interfaces and observability
 - [x] Authenticated read-only API baseline (`digitalbrain.api.server`, token env, no mutation endpoints)
+- [x] Versioned read-only endpoints (`/v1/*`) exposing real configured stores
 - [ ] Dashboard reflecting real system state
 - [ ] 3D architecture visualization backed by live data
 - [ ] Desktop/mobile client access
