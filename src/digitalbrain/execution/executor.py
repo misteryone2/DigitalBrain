@@ -111,7 +111,8 @@ class ToolExecutor:
             self._audit("tool.denied", "denied", {"tool": tool_name, "reason": decision.reason, "arguments": args})
             return ToolExecutionResult(tool_name, False, False, None, decision.reason, decision.reason)
 
-        self._audit("tool.allowed", "allowed", {"tool": tool_name, "reason": decision.reason, "risk_class": spec.risk_class})
+        sandbox_mode = self._resolve_sandbox_mode() if (self.isolated and spec.name in set(default_tools(self.workspace_root).keys())) else "in_process"
+        self._audit("tool.allowed", "allowed", {"tool": tool_name, "reason": decision.reason, "risk_class": spec.risk_class, "sandbox_mode": sandbox_mode})
 
         reserved = False
         if (not spec.read_only) and bool((approval or {}).get("approved", False)):
@@ -124,14 +125,14 @@ class ToolExecutor:
                 return ToolExecutionResult(tool_name, False, False, None, str(exc), f"Approval reserve failed: {exc}")
 
         try:
-            output = self._run_tool(spec, args)
+            output = self._run_tool(spec, args, sandbox_mode=sandbox_mode)
         except TimeoutError as exc:
             self._finalize_approval(approval, tool_name=tool_name, risk_class=spec.risk_class, ok=False, reserved=reserved, error=str(exc))
-            self._audit("tool.failed", "failed", {"tool": tool_name, "error": str(exc), "timeout_s": spec.timeout_s})
+            self._audit("tool.failed", "failed", {"tool": tool_name, "error": str(exc), "timeout_s": spec.timeout_s, "sandbox_mode": sandbox_mode})
             return ToolExecutionResult(tool_name, True, False, None, str(exc), decision.reason)
         except Exception as exc:  # noqa: BLE001 - boundary for tool failures
             self._finalize_approval(approval, tool_name=tool_name, risk_class=spec.risk_class, ok=False, reserved=reserved, error=str(exc))
-            self._audit("tool.failed", "failed", {"tool": tool_name, "error": str(exc)})
+            self._audit("tool.failed", "failed", {"tool": tool_name, "error": str(exc), "sandbox_mode": sandbox_mode})
             return ToolExecutionResult(tool_name, True, False, None, str(exc), decision.reason)
 
         self._finalize_approval(approval, tool_name=tool_name, risk_class=spec.risk_class, ok=True, reserved=reserved, error=None)
@@ -145,6 +146,7 @@ class ToolExecutor:
                 "risk_class": spec.risk_class,
                 "approval_reserved": reserved,
                 "approval_finalized": reserved,
+                "sandbox_mode": sandbox_mode,
             },
         )
         return ToolExecutionResult(tool_name, True, True, output, None, decision.reason)
@@ -215,22 +217,19 @@ class ToolExecutor:
                 {"plan_id": plan_id, "tool": tool_name, "error": str(exc)},
             )
 
-    def _run_tool(self, spec: ToolSpec, args: dict[str, Any]) -> dict[str, Any]:
+    def _run_tool(self, spec: ToolSpec, args: dict[str, Any], *, sandbox_mode: str | None = None) -> dict[str, Any]:
         # Default: isolated subprocess for registry tools. Tests/custom in-memory handlers fall back to in-process.
         from digitalbrain.execution.tools import default_tools
 
         default_names = set(default_tools(self.workspace_root).keys())
         if self.isolated and spec.name in default_names:
-            return self._run_in_subprocess(spec, args)
+            mode = sandbox_mode or self._resolve_sandbox_mode()
+            if mode == "container":
+                return self._run_in_container(spec, args)
+            return self._run_in_host_process(spec, args)
 
         # Fallback in-process timeout
         return self._run_in_process_with_timeout(spec, args)
-
-    def _run_in_subprocess(self, spec: ToolSpec, args: dict[str, Any]) -> dict[str, Any]:
-        mode = self._resolve_sandbox_mode()
-        if mode == "container":
-            return self._run_in_container(spec, args)
-        return self._run_in_host_process(spec, args)
 
     def _resolve_sandbox_mode(self) -> str:
         mode = (self.sandbox_mode or "auto").lower()
