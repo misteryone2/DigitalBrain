@@ -1,6 +1,7 @@
 """CLI integration tests."""
 
 import io
+import json
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -197,6 +198,34 @@ class CLITests(unittest.TestCase):
             text = out.getvalue()
             self.assertIn("Replan proposal", text)
             self.assertIn("not executed", text)
+
+    def test_list_tools_and_run_tool_read_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "note.txt").write_text("hello", encoding="utf-8")
+            out = io.StringIO()
+            with redirect_stdout(out):
+                code = main(["--list-tools", "--workspace", str(root)])
+            self.assertEqual(code, 0)
+            self.assertIn("list_dir (read-only)", out.getvalue())
+
+            out = io.StringIO()
+            with redirect_stdout(out):
+                code = main(["--workspace", str(root), "--run-tool", "read_file", "--tool-args", json.dumps({"path": "note.txt"})])
+            self.assertEqual(code, 0)
+            self.assertIn('"content": "hello"', out.getvalue())
+
+    def test_run_tool_denied_outside_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "ws"
+            root.mkdir()
+            outside = Path(tmp) / "secret.txt"
+            outside.write_text("secret", encoding="utf-8")
+            out = io.StringIO()
+            with redirect_stdout(out):
+                code = main(["--workspace", str(root), "--run-tool", "read_file", "--tool-args", json.dumps({"path": str(outside)})])
+            self.assertEqual(code, 1)
+            self.assertIn("outside allowed workspace", out.getvalue())
 
 
 if __name__ == "__main__":

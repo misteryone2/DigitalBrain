@@ -30,6 +30,7 @@ The project is developed incrementally. The first milestone is a small, testable
 - [x] Plan lifecycle status + deterministic execution gate (`needs_review` on blocked/warnings)
 - [x] Explicit step outcome recording (passed/failed/skipped) with plan metadata update
 - [x] Deterministic failure gate and explicit replan proposals for critical/blocked failed steps (no auto-replan)
+- [x] M4 baseline: read-only tool registry (`list_dir`, `read_file`, `grep`) with workspace boundary, allowlist policy, execution gate awareness, and audit events
 
 ## Requirements
 

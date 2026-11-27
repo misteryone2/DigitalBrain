@@ -91,7 +91,8 @@ Technologies may evolve, but independence, modularity, verifiability, and safety
 - **Plan storage:** `SQLitePlanStore` (`plan_records`) stores append-only plan versions with `version`, `parent_plan_id`, `lifecycle_status`, warnings, context summary, step payloads, and metadata for replanning/history. Replanning marks previous latest plan as `superseded`.
 - **Execution gate:** deterministic gate computes `ready`/`needs_review`; blocked steps, warnings, or failed step outcomes produce `needs_review` with reasons. Gate is stored in plan metadata and audited.
 - **Step outcomes:** explicit outcome recording (`passed/failed/skipped`) updates step history and gate. Failed critical/blocked steps generate an explicit replan proposal in response/metadata; no automatic replanning.
-- **Audit:** `AuditLog` (`audit_events`) provides append-only trace with schema versioning. Current events: `context.conflict_detected`, `plan.generated`, `plan.replanned`, `plan.execution_gate`, `goal.processed`, `plan.lifecycle_changed` (CLI).
+- **Execution (M4 baseline):** `ToolExecutor` exposes a read-only allowlisted tool registry (`list_dir`, `read_file`, `grep`). `ExecutionPolicy` is default-deny, allows only explicit read-only tools, and blocks mutating tools. Paths are resolved and confined to a workspace root. Tool invocations emit audit events: `tool.requested`, `tool.allowed`, `tool.denied`, `tool.executed`, `tool.failed`. Execution gate `needs_review` is surfaced in policy reason; read-only inspection remains allowed by policy in M4.
+- **Audit:** `AuditLog` (`audit_events`) provides append-only trace with schema versioning. Current events: `context.conflict_detected`, `plan.generated`, `plan.replanned`, `plan.execution_gate`, `goal.processed`, `plan.lifecycle_changed` (CLI), `tool.requested/allowed/denied/executed/failed`.
 
 ## Current implementation boundary
 

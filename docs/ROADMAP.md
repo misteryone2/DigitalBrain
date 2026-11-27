@@ -41,10 +41,14 @@ This roadmap turns the [founding vision](VISION.md) into incremental, verifiable
 - [x] Failure-driven replanning proposals (explicit, non-autonomous)
 - [ ] Measurable planning benchmarks and failure/replanning scenarios
 ## M4 — Safe execution and tools
-- [ ] Typed tool registry and permission model
-- [ ] Read-only repository/system inspection tools
-- [ ] Sandboxed execution with resource limits
-- [ ] Audit logs for tool actions
+## M4 - Safe execution and tools
+- [x] Read-only tool registry (`list_dir`, `read_file`, `grep`, workspace-bounded)
+- [x] Permission model baseline: default-deny allowlist, mutating tools blocked
+- [x] Execution gate awareness: `needs_review` surfaced in policy reason for read-only inspection
+- [x] Audit logs for tool actions/decisions (`tool.requested/allowed/denied/executed/failed`)
+- [x] CLI tool inspection/execution commands (`--list-tools`, `--run-tool`)
+- [ ] Sandboxed execution with resource limits/timeouts/process isolation
+- [ ] Controlled mutating tools with explicit approval/gate (not implemented)
 
 ## M5 — Learning and metacognition
 - [ ] Outcome recording and evaluation

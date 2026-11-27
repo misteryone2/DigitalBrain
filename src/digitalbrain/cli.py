@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import json
 
 from digitalbrain.core.audit import AuditLog
 from digitalbrain.core.brain import DigitalBrain
+from digitalbrain.execution import ExecutionPolicy, ToolExecutor
 from digitalbrain.knowledge import SQLiteKnowledgeStore
 from digitalbrain.memory import MemoryType, SQLiteMemoryStore
 from digitalbrain.planning import SQLitePlanStore
@@ -148,6 +150,29 @@ def build_parser() -> argparse.ArgumentParser:
         default=1.0,
         help="Confidence for --add-fact (default: 1.0).",
     )
+    parser.add_argument(
+        "--list-tools",
+        action="store_true",
+        help="List available read-only execution tools.",
+    )
+    parser.add_argument(
+        "--run-tool",
+        help="Run an allowlisted read-only tool by name.",
+    )
+    parser.add_argument(
+        "--tool-args",
+        default="{}",
+        help="JSON object with arguments for --run-tool (default: {}).",
+    )
+    parser.add_argument(
+        "--workspace",
+        default=".",
+        help="Workspace root for tool execution path boundary (default: current directory).",
+    )
+    parser.add_argument(
+        "--tool-plan-id",
+        help="Plan record id in --plan-db whose execution gate is used for --run-tool.",
+    )
     return parser
 
 
@@ -219,7 +244,8 @@ def main(argv: list[str] | None = None) -> int:
     knowledge_actions = [bool(args.add_fact), args.list_facts, args.knowledge_stats]
     plan_actions = [args.list_plans, bool(args.get_plan), bool(args.replan), bool(args.set_plan_lifecycle), bool(args.record_step_outcome)]
     audit_actions = [args.list_audit]
-    groups = [any(memory_actions), any(knowledge_actions), any(plan_actions), any(audit_actions)]
+    execution_actions = [args.list_tools, bool(args.run_tool)]
+    groups = [any(memory_actions), any(knowledge_actions), any(plan_actions), any(audit_actions), any(execution_actions)]
     if sum(1 for a in memory_actions if a) > 1:
         parser.error(
             "Use only one of --list-memory, --memory-stats, --get-memory, or --correct-memory"
@@ -228,8 +254,12 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("Use only one of --add-fact, --list-facts, or --knowledge-stats")
     if sum(1 for a in plan_actions if a) > 1:
         parser.error("Use only one of --list-plans, --get-plan, --replan, --set-plan-lifecycle, or --record-step-outcome")
+    if sum(1 for a in execution_actions if a) > 1:
+        parser.error("Use only one of --list-tools or --run-tool")
+    if args.run_tool and args.tool_plan_id and not args.plan_db:
+        parser.error("--tool-plan-id requires --plan-db")
     if sum(groups) > 1:
-        parser.error("Use memory, knowledge, plan, or audit commands separately")
+        parser.error("Use memory, knowledge, plan, audit, or execution commands separately")
 
     if args.correct_memory:
         if not args.memory_db:
@@ -287,6 +317,12 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"Error: {exc}")
                 return 1
         gate = rec.metadata.get("execution_gate", {}) if isinstance(rec.metadata, dict) else {}
+        if args.audit_db:
+            with AuditLog(args.audit_db) as audit:
+                audit.record("plan.step_outcome", actor="cli", outcome=event['outcome'], details={"plan_id": rec.id, "step_id": event['step_id'], "reason": event.get('reason')})
+                proposal = event.get("replan_proposal")
+                if isinstance(proposal, dict):
+                    audit.record("plan.replan_proposed", actor="cli", outcome="proposed", details={"plan_id": rec.id, "step_id": event['step_id'], "reason": proposal.get('reason')})
         print(f"Plan record: {rec.id}")
         print(f"Step: {event['step_id']} outcome={event['outcome']}")
         print(f"Execution gate: {gate.get('status')} executable={gate.get('executable')}")
@@ -345,6 +381,48 @@ def main(argv: list[str] | None = None) -> int:
             for rec in records:
                 _print_plan(rec)
             return 0
+
+    if args.list_tools or args.run_tool:
+        audit = AuditLog(args.audit_db) if args.audit_db else None
+        try:
+            executor = ToolExecutor(workspace_root=args.workspace, audit_log=audit)
+            if args.list_tools:
+                for spec in executor.list_tools():
+                    ro = "read-only" if spec["read_only"] else "mutating"
+                    print(f"{spec['name']} ({ro}): {spec['description']}")
+                return 0
+
+            try:
+                tool_args = json.loads(args.tool_args)
+            except json.JSONDecodeError as exc:
+                print(f"Error: invalid --tool-args JSON: {exc}")
+                return 1
+            if not isinstance(tool_args, dict):
+                print("Error: --tool-args must be a JSON object.")
+                return 1
+
+            gate = None
+            if args.tool_plan_id:
+                with SQLitePlanStore(args.plan_db) as plans:
+                    plan = plans.get(args.tool_plan_id)
+                    if plan is None:
+                        print(f"Plan record not found: {args.tool_plan_id}")
+                        return 1
+                    gate = plan.metadata.get("execution_gate") if isinstance(plan.metadata, dict) else None
+
+            result = executor.execute(args.run_tool, tool_args, execution_gate=gate)
+            print(f"Tool: {result.tool}")
+            print(f"Allowed: {result.allowed}")
+            print(f"OK: {result.ok}")
+            print(f"Policy: {result.policy_reason}")
+            if result.error:
+                print(f"Error: {result.error}")
+            if result.output is not None:
+                print(json.dumps(result.output, ensure_ascii=False, indent=2, sort_keys=True))
+            return 0 if result.ok else 1
+        finally:
+            if audit is not None:
+                audit.close()
 
     if args.list_audit:
         if not args.audit_db:
