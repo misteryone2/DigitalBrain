@@ -8,8 +8,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from digitalbrain.core.brain import DigitalBrain, GoalStatus
-from digitalbrain.planning import SQLitePlanStore
+from digitalbrain.planning.store import SQLitePlanStore
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +22,8 @@ class BenchmarkResult:
 
 
 def run_planning_benchmarks() -> list[BenchmarkResult]:
+    from digitalbrain.core.brain import DigitalBrain, GoalStatus  # local import to avoid circular import
+
     results: list[BenchmarkResult] = []
 
     # 1) Deterministic planning structure

@@ -137,13 +137,13 @@ class TestExecution(unittest.TestCase):
             ex = ToolExecutor(workspace_root=root, policy=policy, tools=all_tools, sandbox_mode="container")
             with mock.patch("digitalbrain.execution.executor.ToolExecutor._docker_available", return_value=True):
                 denied_risk = ex.execute(
-                "write_file",
-                {"path": "x.txt", "content": "hi", "overwrite": True},
-                execution_gate={"status": "ready"},
-                approval={"approved": True, "tool_name": "write_file", "risk_class": "high"},
-            )
-            self.assertFalse(denied_risk.ok)
-            self.assertIn("risk class", denied_risk.policy_reason.lower())
+                    "write_file",
+                    {"path": "x.txt", "content": "hi", "overwrite": True},
+                    execution_gate={"status": "ready"},
+                    approval={"approved": True, "tool_name": "write_file", "risk_class": "high"},
+                )
+                self.assertFalse(denied_risk.ok)
+                self.assertIn("risk class", denied_risk.policy_reason.lower())
 
                 denied_consumed = ex.execute(
                     "write_file",
