@@ -116,6 +116,12 @@ class SQLiteMemoryStoreTests(unittest.TestCase):
                 self.assertEqual(stats["active_records"], 2)
                 self.assertEqual(stats["superseded_records"], 1)
 
+                page1 = store.list_records(limit=1, offset=0, include_superseded=True)
+                page2 = store.list_records(limit=1, offset=1, include_superseded=True)
+                self.assertEqual(len(page1), 1)
+                self.assertEqual(len(page2), 1)
+                self.assertNotEqual(page1[0].id, page2[0].id)
+
     def test_rejects_invalid_record(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "memory.db"
@@ -128,6 +134,8 @@ class SQLiteMemoryStoreTests(unittest.TestCase):
                     store.add_record("ok", source="test", confidence=1.5)
                 with self.assertRaises(ValueError):
                     store.list_records(limit=0)
+                with self.assertRaises(ValueError):
+                    store.list_records(offset=-1)
                 with self.assertRaises(ValueError):
                     store.list_records(source=" ")
                 with self.assertRaises(ValueError):

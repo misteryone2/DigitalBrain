@@ -27,6 +27,7 @@ class SQLitePlanStoreTests(unittest.TestCase):
                     warnings=["conflict"],
                 )
                 plans = store.list_plans(goal="Build app")
+                paged = store.list_plans(limit=1, offset=1, goal="Build app")
                 latest = store.latest_for_goal("Build app")
                 p1_after = store.get(p1.id)
 
@@ -36,6 +37,8 @@ class SQLitePlanStoreTests(unittest.TestCase):
             self.assertIsNotNone(p1_after)
             assert p1_after is not None
             self.assertEqual(p1_after.lifecycle_status, "superseded")
+            self.assertEqual(len(paged), 1)
+            self.assertEqual(paged[0].id, p1.id)
             self.assertEqual(len(plans), 2)
             self.assertIsNotNone(latest)
             assert latest is not None

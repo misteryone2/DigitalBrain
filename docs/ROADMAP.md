@@ -29,7 +29,7 @@ This roadmap turns the [founding vision](VISION.md) into incremental, verifiable
 - [x] Deterministic context-aware planning baseline with tests
 - [x] Append-only audit baseline for context/plan/goal events
 
-## M3 — Reasoning and planning
+## M3 - Reasoning and planning
 - [x] Internal deterministic planning interface (`PlannerProtocol`, no external LLM dependency)
 - [x] Structured plans with states, dependencies, verification, source rules
 - [x] Conflict-aware warnings and blocked validation steps
@@ -40,7 +40,6 @@ This roadmap turns the [founding vision](VISION.md) into incremental, verifiable
 - [x] Step outcome recording (explicit command/API) and gate metadata refresh
 - [x] Failure-driven replanning proposals (explicit, non-autonomous)
 - [ ] Measurable planning benchmarks and failure/replanning scenarios
-## M4 — Safe execution and tools
 ## M4 - Safe execution and tools
 - [x] Read-only tool registry (`list_dir`, `read_file`, `grep`, workspace-bounded)
 - [x] Permission model baseline: default-deny allowlist, mutating tools blocked by default

@@ -68,6 +68,18 @@ class SQLiteKnowledgeStoreTests(unittest.TestCase):
             self.assertEqual(conflicts[0]["subject"], "Project")
             self.assertEqual(len(conflicts[0]["facts"]), 2)
 
+    def test_list_facts_offset(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "knowledge.db"
+            with SQLiteKnowledgeStore(db) as store:
+                for i in range(3):
+                    store.add_fact("S", "p", f"o{i}", source="test")
+                p1 = store.list_facts(limit=1, offset=0)
+                p2 = store.list_facts(limit=1, offset=1)
+                self.assertEqual(len(p1), 1)
+                self.assertEqual(len(p2), 1)
+                self.assertNotEqual(p1[0].id, p2[0].id)
+
     def test_rejects_invalid_fact(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             db = Path(tmp) / "knowledge.db"
